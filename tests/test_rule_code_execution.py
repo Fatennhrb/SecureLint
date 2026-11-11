@@ -26,6 +26,10 @@ def findings_in(tmp_path: Path, code: str) -> tuple[Finding, ...]:
         "import builtins\nbuiltins.eval(data)\n",
         "import builtins\nbuiltins.exec(data)\n",
         "value = int(eval(data))\n",
+        # The same functions reached under another name.
+        "import builtins as b\nb.eval(data)\n",
+        "from builtins import eval as run_text\nrun_text(data)\n",
+        "from builtins import exec\nexec(data)\n",
     ],
 )
 def test_reports_code_built_at_run_time(tmp_path: Path, code: str) -> None:
@@ -45,6 +49,9 @@ def test_reports_code_built_at_run_time(tmp_path: Path, code: str) -> None:
         "evaluate(data)\n",
         "literal_eval(data)\n",
         "import ast\nast.literal_eval(data)\n",
+        # The project's own function, imported over the built-in name.
+        "from mylib import eval\neval(data)\n",
+        "from .sandbox import exec\nexec(code)\n",
         # Not a call.
         "run = eval\n",
         "eval()\n",

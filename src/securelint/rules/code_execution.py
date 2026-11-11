@@ -3,9 +3,9 @@
 import ast
 from collections.abc import Iterable
 
+from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
-from securelint.rules._helpers import dotted_name
 
 _DANGEROUS_BUILTINS = frozenset({"eval", "exec", "builtins.eval", "builtins.exec"})
 
@@ -32,10 +32,10 @@ class DynamicCodeExecution(Rule):
     rule_id = "SL101"
     node_types = (ast.Call,)
 
-    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         if not isinstance(node, ast.Call):
             return []
-        name = dotted_name(node.func)
+        name = context.qualified_name(node.func)
         if name not in _DANGEROUS_BUILTINS:
             return []
         # The code to run is always the first argument. A literal there is
@@ -54,7 +54,7 @@ class DynamicCodeExecution(Rule):
                 # The rule sees that the argument is not fixed, but not where
                 # it comes from, so it cannot be fully sure.
                 confidence=Confidence.MEDIUM,
-                path=path,
+                path=context.path,
                 line=node.lineno,
                 column=node.col_offset + 1,
             )

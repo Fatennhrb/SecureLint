@@ -3,9 +3,10 @@
 import ast
 from collections.abc import Iterable
 
+from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
-from securelint.rules._helpers import dotted_name, is_fixed
+from securelint.rules._helpers import is_fixed
 
 # Formats that can describe "call this function" as part of the data.
 _PICKLE_LIKE = frozenset(
@@ -48,10 +49,10 @@ class UnsafeDeserialization(Rule):
     rule_id = "SL103"
     node_types = (ast.Call,)
 
-    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         if not isinstance(node, ast.Call):
             return []
-        name = dotted_name(node.func)
+        name = context.qualified_name(node.func)
         if name is None:
             return []
         # Data written in the source itself cannot be changed by anyone.
@@ -67,7 +68,7 @@ class UnsafeDeserialization(Rule):
             # and the rule cannot tell where the data comes from.
             confidence = Confidence.LOW
         elif name in _YAML_ALWAYS_UNSAFE or (
-            name in _YAML_LOAD and not _uses_safe_yaml_loader(node)
+            name in _YAML_LOAD and not _uses_safe_yaml_loader(node, context)
         ):
             message = (
                 f"{name}() without a safe loader can run code hidden in the "
@@ -84,14 +85,14 @@ class UnsafeDeserialization(Rule):
                 message=message,
                 severity=Severity.HIGH,
                 confidence=confidence,
-                path=path,
+                path=context.path,
                 line=node.lineno,
                 column=node.col_offset + 1,
             )
         ]
 
 
-def _uses_safe_yaml_loader(call: ast.Call) -> bool:
+def _uses_safe_yaml_loader(call: ast.Call, context: FileContext) -> bool:
     """Return True for ``yaml.load(data, Loader=<a safe loader>)``."""
     loader: ast.expr | None = None
     if len(call.args) >= 2:
@@ -101,6 +102,6 @@ def _uses_safe_yaml_loader(call: ast.Call) -> bool:
             loader = keyword.value
     if loader is None:
         return False
-    name = dotted_name(loader)
+    name = context.qualified_name(loader)
     # "yaml.SafeLoader" and a directly imported "SafeLoader" both count.
     return name is not None and name.rpartition(".")[2] in _SAFE_YAML_LOADERS

@@ -3,9 +3,10 @@
 import ast
 from collections.abc import Iterable
 
+from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
-from securelint.rules._helpers import dotted_name, is_fixed
+from securelint.rules._helpers import is_fixed
 
 # These always hand their command to the shell.
 _ALWAYS_SHELL = frozenset(
@@ -18,8 +19,14 @@ _ALWAYS_SHELL = frozenset(
 )
 
 # These use the shell only when called with ``shell=True``.
-_SUBPROCESS_FUNCTIONS = frozenset(
-    {"run", "call", "check_call", "check_output", "Popen"}
+_SHELL_ON_REQUEST = frozenset(
+    {
+        "subprocess.run",
+        "subprocess.call",
+        "subprocess.check_call",
+        "subprocess.check_output",
+        "subprocess.Popen",
+    }
 )
 
 # The command is the first argument, or one of these keywords.
@@ -50,17 +57,13 @@ class ShellCommandInjection(Rule):
     rule_id = "SL102"
     node_types = (ast.Call,)
 
-    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         if not isinstance(node, ast.Call):
             return []
-        name = dotted_name(node.func)
-        if name is None:
-            return []
+        name = context.qualified_name(node.func)
         if name in _ALWAYS_SHELL:
             label = f"{name}()"
-        elif name.rpartition(".")[2] in _SUBPROCESS_FUNCTIONS and _has_shell_true(node):
-            # Matching the last part of the name also covers
-            # `import subprocess as sp` and `from subprocess import run`.
+        elif name in _SHELL_ON_REQUEST and _has_shell_true(node):
             label = f"{name}(..., shell=True)"
         else:
             return []
@@ -80,7 +83,7 @@ class ShellCommandInjection(Rule):
                 # The rule sees that the command is not fixed, but not where
                 # its parts come from, so it cannot be fully sure.
                 confidence=Confidence.MEDIUM,
-                path=path,
+                path=context.path,
                 line=node.lineno,
                 column=node.col_offset + 1,
             )

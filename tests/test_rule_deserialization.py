@@ -35,6 +35,13 @@ def findings_in(tmp_path: Path, code: str) -> tuple[Finding, ...]:
         "yaml.load_all(document)\n",
         "yaml.unsafe_load(document)\n",
         "yaml.unsafe_load_all(document)\n",
+        # The same functions reached under another name.
+        "import pickle as pk\npk.loads(data)\n",
+        "from pickle import loads\nloads(data)\n",
+        "from pickle import load as restore\nrestore(file)\n",
+        "import yaml as y\ny.load(document)\n",
+        "from yaml import load\nload(document)\n",
+        "from yaml import load, Loader\nload(document, Loader=Loader)\n",
     ],
 )
 def test_reports_unsafe_loading(tmp_path: Path, code: str) -> None:
@@ -66,6 +73,11 @@ def test_reports_unsafe_loading(tmp_path: Path, code: str) -> None:
         # Other things that only share a name.
         "loader.load(file)\n",
         "config.loads(text)\n",
+        "loads(data)\n",
+        "from json import loads\nloads(text)\n",
+        "import json as pickle\npickle.loads(text)\n",
+        "from yaml import load, SafeLoader\nload(document, Loader=SafeLoader)\n",
+        "from yaml import safe_load as load\nload(document)\n",
         "pickle.load()\n",
     ],
 )

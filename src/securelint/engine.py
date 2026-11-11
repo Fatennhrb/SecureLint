@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
+from securelint.context import FileContext, collect_imports
 from securelint.discovery import discover
 from securelint.model import Finding
 from securelint.parsing import ParsedFile, ParseFailure, parse
@@ -27,10 +28,11 @@ class Rule(ABC):
     """The node classes this rule inspects, e.g. ``(ast.Call,)``."""
 
     @abstractmethod
-    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         """Return the findings for one node (usually none or one).
 
-        ``path`` is the file's relative path, to put in each ``Finding``.
+        ``context`` describes the file the node is in: its path, and how to
+        turn a name used in the file into the real name behind it.
         """
 
 
@@ -88,11 +90,19 @@ def _check_file(
     every rule added. Here the tree is walked once and each node is handed
     to the rules interested in its type.
     """
-    path = parsed_file.source_file.relative_path
+    # The nodes are kept in a list because they are needed twice: first to
+    # learn the file's imports, then to run the rules. An import can be
+    # written below the code that uses it (inside a function, for example),
+    # so the imports must all be known before the first rule runs.
+    nodes = list(ast.walk(parsed_file.tree))
+    context = FileContext(
+        path=parsed_file.source_file.relative_path,
+        imports=collect_imports(nodes),
+    )
     findings: list[Finding] = []
-    for node in ast.walk(parsed_file.tree):
+    for node in nodes:
         for rule in rules_by_node_type.get(type(node), ()):
-            findings.extend(rule.check(node, path))
+            findings.extend(rule.check(node, context))
     return findings
 
 

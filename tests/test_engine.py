@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from securelint.context import FileContext
 from securelint.engine import Rule, scan
 from securelint.model import Confidence, Finding, Severity
 
@@ -30,11 +31,11 @@ class EvalRule(Rule):
     def __init__(self) -> None:
         self.seen: list[ast.AST] = []
 
-    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         self.seen.append(node)
         assert isinstance(node, ast.Call)
         if isinstance(node.func, ast.Name) and node.func.id == "eval":
-            yield make_finding("T001", node, path)
+            yield make_finding("T001", node, context.path)
 
 
 class AssertRule(Rule):
@@ -42,9 +43,22 @@ class AssertRule(Rule):
 
     node_types = (ast.Assert,)
 
-    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         assert isinstance(node, ast.Assert)
-        yield make_finding("T002", node, path)
+        yield make_finding("T002", node, context.path)
+
+
+class ImportSpy(Rule):
+    """Records the imports the engine reports for each file it checks."""
+
+    node_types = (ast.Module,)
+
+    def __init__(self) -> None:
+        self.imports: dict[str, dict[str, str]] = {}
+
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
+        self.imports[context.path] = dict(context.imports)
+        return []
 
 
 def write(path: Path, text: str) -> None:
@@ -147,6 +161,23 @@ def test_tree_is_walked_once_per_file_whatever_the_number_of_rules(
     scan(tmp_path, [EvalRule(), AssertRule(), EvalRule()])
 
     assert walks == 2
+
+
+def test_each_file_gets_its_own_imports(tmp_path: Path) -> None:
+    write(tmp_path / "a.py", "import subprocess as sp\n")
+    # The import is written below the code that uses it.
+    write(
+        tmp_path / "b.py",
+        "def f():\n    return system('ls')\n\nfrom os import system\n",
+    )
+    spy = ImportSpy()
+
+    scan(tmp_path, [spy])
+
+    assert spy.imports == {
+        "a.py": {"sp": "subprocess"},
+        "b.py": {"system": "os.system"},
+    }
 
 
 def test_broken_file_is_reported_and_the_scan_continues(tmp_path: Path) -> None:

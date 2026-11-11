@@ -34,10 +34,15 @@ def findings_in(tmp_path: Path, code: str) -> tuple[Finding, ...]:
         "subprocess.Popen(command, shell=True)\n",
         # With shell=True the list's first element is still shell text.
         "subprocess.run(['ls ' + folder], shell=True)\n",
-        # The module or function imported under another name.
-        "sp.run(command, shell=True)\n",
-        "run(command, shell=True)\n",
-        "Popen(command, shell=True)\n",
+        # The same functions reached under another name.
+        "import subprocess as sp\nsp.run(command, shell=True)\n",
+        "from subprocess import run\nrun(command, shell=True)\n",
+        "from subprocess import Popen\nPopen(command, shell=True)\n",
+        "from subprocess import check_output as out\nout(command, shell=True)\n",
+        "from os import system\nsystem(command)\n",
+        "from os import system as sh\nsh(command)\n",
+        "import os as operating_system\noperating_system.popen(command)\n",
+        "from subprocess import getoutput\ngetoutput('ls ' + folder)\n",
     ],
 )
 def test_reports_shell_commands_built_at_run_time(tmp_path: Path, code: str) -> None:
@@ -62,7 +67,13 @@ def test_reports_shell_commands_built_at_run_time(tmp_path: Path, code: str) -> 
         "subprocess.run(command, shell=use_shell)\n",
         # Other things that only share a name.
         "app.run(host, debug=True)\n",
+        "app.run(command, shell=True)\n",
         "pool.call(command)\n",
+        "run(command, shell=True)\n",
+        "from mylib import system\nsystem(command)\n",
+        "from mylib import run\nrun(command, shell=True)\n",
+        "from . import subprocess\nsubprocess.run(command, shell=True)\n",
+        "from subprocess import run\nrun(['ping', host])\n",
         "system(command)\n",
         "os.system()\n",
         "os.path.join(a, b)\n",
@@ -87,4 +98,13 @@ def test_finding_details(tmp_path: Path) -> None:
 def test_message_shows_shell_true_for_subprocess(tmp_path: Path) -> None:
     (finding,) = findings_in(tmp_path, "subprocess.run(command, shell=True)\n")
 
+    assert finding.message.startswith("subprocess.run(..., shell=True) runs")
+
+
+def test_message_shows_the_real_name_behind_an_alias(tmp_path: Path) -> None:
+    code = "import subprocess as sp\nsp.run(command, shell=True)\n"
+
+    (finding,) = findings_in(tmp_path, code)
+
+    assert finding.line == 2
     assert finding.message.startswith("subprocess.run(..., shell=True) runs")

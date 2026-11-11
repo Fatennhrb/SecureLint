@@ -10,6 +10,7 @@ import pytest
 
 from securelint import __version__, cli
 from securelint.cli import main
+from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
 
@@ -19,7 +20,7 @@ class EvalRule(Rule):
 
     node_types = (ast.Call,)
 
-    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+    def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         assert isinstance(node, ast.Call)
         if isinstance(node.func, ast.Name) and node.func.id == "eval":
             yield Finding(
@@ -27,7 +28,7 @@ class EvalRule(Rule):
                 message="Call to eval().",
                 severity=Severity.HIGH,
                 confidence=Confidence.HIGH,
-                path=path,
+                path=context.path,
                 line=node.lineno,
                 column=node.col_offset + 1,
             )

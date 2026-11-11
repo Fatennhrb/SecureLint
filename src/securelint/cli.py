@@ -8,6 +8,7 @@ from pathlib import Path
 from securelint import __version__
 from securelint.engine import Rule, scan
 from securelint.report import format_text
+from securelint.rules import ALL_RULES
 
 # Exit codes are how a CI job reads the result, so they are part of the
 # tool's public behaviour and must stay stable.
@@ -23,9 +24,8 @@ EXIT_ERROR = 2
 This is also the code argparse uses for a wrong command line.
 """
 
-# The rules every scan runs. Empty for now: the first real rules are the
-# next milestone.
-RULES: tuple[Rule, ...] = ()
+# The rules every scan runs. A module-level name so tests can replace it.
+RULES: tuple[Rule, ...] = ALL_RULES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -87,8 +87,6 @@ def _run_scan(target: Path) -> int:
         if failure.line is not None:
             place += f":{failure.line}"
         _print_error(f"cannot scan {place}: {failure.message}")
-    if not RULES:
-        _print_error("note: no detection rules exist yet, so nothing was checked")
 
     if result.failures:
         # A file nobody could read is not a clean file. Reporting success

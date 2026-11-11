@@ -35,7 +35,11 @@ class EvalRule(Rule):
 
 @pytest.fixture
 def eval_rule(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make the scan command run ``EvalRule``, as there are no real rules yet."""
+    """Make the scan command run only ``EvalRule``.
+
+    The command's own behaviour (output, exit codes) is then tested with a
+    rule that never changes, whatever happens to the real rules.
+    """
     monkeypatch.setattr(cli, "RULES", (EvalRule(),))
 
 
@@ -149,14 +153,14 @@ def test_scan_a_single_file(tmp_path: Path) -> None:
     assert main(["scan", str(script)]) == 1
 
 
-def test_scan_says_when_there_are_no_rules(
+def test_scan_runs_the_real_rules(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # With no rules a "no problems" result means nothing, and must say so.
-    (tmp_path / "app.py").write_text("eval(x)\n", encoding="utf-8")
+    # No fake rule here: this checks the real rules reach the command.
+    (tmp_path / "app.py").write_text("result = eval(data)\n", encoding="utf-8")
 
-    assert main(["scan", str(tmp_path)]) == 0
-    assert "no detection rules exist yet" in capsys.readouterr().err
+    assert main(["scan", str(tmp_path)]) == 1
+    assert "app.py:1:10  high      SL101  eval() runs" in capsys.readouterr().out
 
 
 def test_scan_command_runs_as_a_real_process(tmp_path: Path) -> None:

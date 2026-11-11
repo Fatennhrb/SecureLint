@@ -15,7 +15,13 @@ authors = [{ name = "Faten Harbaoui" }]
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    # Ruff adds and changes rules between 0.x minor releases, so stay within
+    # one minor version: a dependency update alone must never break the build.
+    "ruff>=0.16.9,<0.17",
+    "mypy>=2.3",
+]
 
 [project.scripts]
 securelint = "securelint.cli:main"
@@ -25,3 +31,37 @@ path = "src/securelint/__init__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+# Ruff takes the target Python version from requires-python above.
+# "src" lets the import sorter recognise `securelint` as first-party code.
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes: unused imports and names, undefined names
+    "I",    # isort: import ordering
+    "B",    # flake8-bugbear: likely bugs and design problems
+    "UP",   # pyupgrade: use syntax available in Python 3.11+
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+    "PT",   # flake8-pytest-style
+    "PTH",  # use pathlib instead of os.path
+    "RUF",  # Ruff-specific rules
+    "S",    # flake8-bandit: a security tool should pass basic security lint
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest is built on plain `assert` statements.
+"tests/**" = ["S101"]
+
+[tool.mypy]
+# Check against the oldest supported Python, so code that only works on a
+# newer version fails here instead of on a user's machine.
+python_version = "3.11"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]

@@ -1,0 +1,3 @@
+# Store text files with LF line endings and check them out with LF on every
+# OS, so Windows and Linux (CI) never disagree about line endings in diffs.
+* text=auto eol=lf

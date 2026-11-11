@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "securelint"
+dynamic = ["version"]
+description = "A security scanner and CI policy gate for Python projects."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Faten Harbaoui" }]
+# The scanner itself needs nothing outside the standard library.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+securelint = "securelint.cli:main"
+
+[tool.hatch.version]
+path = "src/securelint/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

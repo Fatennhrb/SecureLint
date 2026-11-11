@@ -26,6 +26,9 @@ python -m mypy                    # type check (strict mode)
 python -m pytest                  # tests
 ```
 
+GitHub Actions runs the same four checks on every push to `main` and on every
+pull request, on Python 3.11 and 3.14 (see [ci.yml](.github/workflows/ci.yml)).
+
 ## Usage
 
 ```bash

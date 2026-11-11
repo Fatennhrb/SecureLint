@@ -4,7 +4,7 @@ SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
 **Status:** early. `securelint scan` finds the Python files in a project, parses
-them and checks them against the rules listed below. There are three rules so far.
+them and checks them against the rules listed below. There are four rules so far.
 
 ## Requirements
 
@@ -54,6 +54,7 @@ The exit code tells a script or a CI job what happened:
 | SL101 | High | `eval()` or `exec()` called with a value built at run time. A fixed string such as `eval("2 + 2")` is not reported. |
 | SL102 | High | A shell command built at run time: `os.system()`, `os.popen()`, `subprocess.getoutput()`, or a `subprocess` call with `shell=True`. A fixed command, or a list of arguments without `shell=True`, is not reported. |
 | SL103 | High | Data loaded with a format that can run code: `pickle`, `dill` or `marshal` loading, and `yaml.load()` without a safe loader. `yaml.safe_load()` and JSON are not reported. |
+| SL104 | Medium | A password or key written directly in the code, such as `password = "hunter2"`, `connect(password="hunter2")` or `{"api_key": "sk-live-123"}`. The rule reads the name, so `password_field = "password"`, empty strings and placeholders such as `"<password>"` are not reported. The secret itself is never printed in the report. |
 
 Rules follow imports, so a function is recognised under any name the file gives
 it: `import subprocess as sp`, `from os import system` and

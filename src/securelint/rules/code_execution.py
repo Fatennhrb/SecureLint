@@ -5,8 +5,9 @@ from collections.abc import Iterable
 
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
+from securelint.rules._helpers import dotted_name
 
-_DANGEROUS_BUILTINS = frozenset({"eval", "exec"})
+_DANGEROUS_BUILTINS = frozenset({"eval", "exec", "builtins.eval", "builtins.exec"})
 
 
 class DynamicCodeExecution(Rule):
@@ -34,7 +35,7 @@ class DynamicCodeExecution(Rule):
     def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
         if not isinstance(node, ast.Call):
             return []
-        name = _builtin_name(node.func)
+        name = dotted_name(node.func)
         if name not in _DANGEROUS_BUILTINS:
             return []
         # The code to run is always the first argument. A literal there is
@@ -45,7 +46,8 @@ class DynamicCodeExecution(Rule):
             Finding(
                 rule_id=self.rule_id,
                 message=(
-                    f"{name}() runs its argument as Python code; "
+                    f"{name.removeprefix('builtins.')}() runs its argument as "
+                    "Python code; "
                     "if that value can come from a user, they can run any code."
                 ),
                 severity=Severity.HIGH,
@@ -57,16 +59,3 @@ class DynamicCodeExecution(Rule):
                 column=node.col_offset + 1,
             )
         ]
-
-
-def _builtin_name(func: ast.expr) -> str | None:
-    """Return the name for ``name(...)`` or ``builtins.name(...)`` calls."""
-    if isinstance(func, ast.Name):
-        return func.id
-    if (
-        isinstance(func, ast.Attribute)
-        and isinstance(func.value, ast.Name)
-        and func.value.id == "builtins"
-    ):
-        return func.attr
-    return None

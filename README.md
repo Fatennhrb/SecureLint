@@ -3,7 +3,9 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
-**Status:** project skeleton. The command line runs, but it has no security checks yet.
+**Status:** the scanner core works: `securelint scan` finds the Python files in a
+project, parses them and reports a result. It has no detection rules yet, so it
+cannot find any security problem today.
 
 ## Requirements
 
@@ -33,7 +35,18 @@ pull request, on Python 3.11 and 3.14 (see [ci.yml](.github/workflows/ci.yml)).
 
 ```bash
 securelint --version
+securelint scan              # scan the current directory
+securelint scan src/         # scan one directory
+securelint scan app.py       # scan one file
 ```
+
+The exit code tells a script or a CI job what happened:
+
+| Code | Meaning |
+|------|---------|
+| 0 | The scan finished and found no problems. |
+| 1 | The scan finished and found at least one problem. |
+| 2 | The scan could not be completed: wrong command line, a path that does not exist, or a file that could not be read or parsed. |
 
 ## License
 

@@ -1,12 +1,42 @@
 """Tests for the command-line entry points."""
 
+import ast
 import subprocess
 import sys
+from collections.abc import Iterable
+from pathlib import Path
 
 import pytest
 
-from securelint import __version__
+from securelint import __version__, cli
 from securelint.cli import main
+from securelint.engine import Rule
+from securelint.model import Confidence, Finding, Severity
+
+
+class EvalRule(Rule):
+    """A stand-in rule: reports every call to a function named ``eval``."""
+
+    node_types = (ast.Call,)
+
+    def check(self, node: ast.AST, path: str) -> Iterable[Finding]:
+        assert isinstance(node, ast.Call)
+        if isinstance(node.func, ast.Name) and node.func.id == "eval":
+            yield Finding(
+                rule_id="T001",
+                message="Call to eval().",
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                path=path,
+                line=node.lineno,
+                column=node.col_offset + 1,
+            )
+
+
+@pytest.fixture
+def eval_rule(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the scan command run ``EvalRule``, as there are no real rules yet."""
+    monkeypatch.setattr(cli, "RULES", (EvalRule(),))
 
 
 def test_version_flag_prints_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -43,3 +73,101 @@ def test_package_runs_as_a_module() -> None:
 
     assert result.returncode == 0
     assert result.stdout.strip() == f"securelint {__version__}"
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_clean_code_exits_0(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "app.py").write_text("print('safe')\n", encoding="utf-8")
+
+    assert main(["scan", str(tmp_path)]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out == "No problems found in 1 file.\n"
+    assert captured.err == ""
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_with_findings_exits_1(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "app.py").write_text("x = 1\ny = eval(x)\n", encoding="utf-8")
+
+    assert main(["scan", str(tmp_path)]) == 1
+
+    assert capsys.readouterr().out.splitlines() == [
+        "app.py:2:5  high      T001  Call to eval().",
+        "",
+        "1 problem found in 1 file (1 high).",
+    ]
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_missing_path_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["scan", str(tmp_path / "does-not-exist")]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "securelint: error: no such file or directory" in captured.err
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_with_an_unreadable_file_exits_2_even_with_findings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "broken.py").write_text("def oops(:\n", encoding="utf-8")
+    (tmp_path / "found.py").write_text("eval(x)\n", encoding="utf-8")
+
+    assert main(["scan", str(tmp_path)]) == 2
+
+    captured = capsys.readouterr()
+    assert "found.py:1:1" in captured.out
+    assert "securelint: cannot scan broken.py:1:" in captured.err
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_defaults_to_the_current_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "app.py").write_text("eval(x)\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["scan"]) == 1
+    assert "app.py:1:1" in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_a_single_file(tmp_path: Path) -> None:
+    script = tmp_path / "script.py"
+    script.write_text("eval(x)\n", encoding="utf-8")
+
+    assert main(["scan", str(script)]) == 1
+
+
+def test_scan_says_when_there_are_no_rules(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # With no rules a "no problems" result means nothing, and must say so.
+    (tmp_path / "app.py").write_text("eval(x)\n", encoding="utf-8")
+
+    assert main(["scan", str(tmp_path)]) == 0
+    assert "no detection rules exist yet" in capsys.readouterr().err
+
+
+def test_scan_command_runs_as_a_real_process(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "securelint", "scan", "missing"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "no such file or directory" in result.stderr

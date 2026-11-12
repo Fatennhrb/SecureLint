@@ -61,6 +61,26 @@ Rules follow imports, so a function is recognised under any name the file gives
 it: `import subprocess as sp`, `from os import system` and
 `from os import system as sh` are all understood.
 
+## How well does it detect?
+
+The rules are measured against a set of annotated example files in
+[tests/corpus](tests/corpus/README.md). Every dangerous line there is marked,
+including the ones SecureLint does not find yet.
+
+| | Count |
+|---|---:|
+| Dangerous lines reported | 50 |
+| Dangerous lines missed | 13 |
+| Safe lines reported by mistake | 8 |
+
+The misses are mostly values that pass through a variable before reaching the
+dangerous call (`query = f"..."` then `cursor.execute(query)`), which the
+scanner cannot follow yet. These examples were written for this project, so the
+numbers show what works and what does not today, not results on real projects.
+
+Scanning this repository itself reports the corpus files, since they contain
+dangerous code on purpose.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -36,6 +36,8 @@ testpaths = ["tests"]
 # Ruff takes the target Python version from requires-python above.
 # "src" lets the import sorter recognise `securelint` as first-party code.
 src = ["src"]
+# The corpus is example code for the scanner to read, bad code included.
+extend-exclude = ["tests/corpus"]
 
 [tool.ruff.lint]
 select = [
@@ -62,6 +64,7 @@ select = [
 # newer version fails here instead of on a user's machine.
 python_version = "3.11"
 files = ["src", "tests"]
+exclude = ["^tests/corpus/"]
 strict = true
 warn_unreachable = true
 enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]

@@ -27,7 +27,7 @@ def format_text(result: ScanResult) -> str:
     ]
     if lines:
         lines.append("")
-    lines.append(_summary(result))
+    lines.append(summary_line(result))
     return "\n".join(lines)
 
 
@@ -79,7 +79,8 @@ def format_json(result: ScanResult) -> str:
     return json.dumps(document, indent=2)
 
 
-def _summary(result: ScanResult) -> str:
+def summary_line(result: ScanResult) -> str:
+    """Return the one-sentence result, e.g. ``2 problems found in 1 file (2 high).``"""
     files = _count(result.files_scanned, "file")
     if not result.findings:
         return f"No problems found in {files}."

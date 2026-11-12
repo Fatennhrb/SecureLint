@@ -224,3 +224,17 @@ def test_scan_unknown_format_is_rejected(
 
     assert exc_info.value.code == 2
     assert "invalid choice: 'xml'" in capsys.readouterr().err
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_html_format_prints_a_page(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "app.py").write_text("x = 1\ny = eval(x)\n", encoding="utf-8")
+
+    assert main(["scan", str(tmp_path), "--format", "html"]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out.startswith("<!DOCTYPE html>")
+    assert "Call to eval()." in captured.out
+    assert captured.err == ""

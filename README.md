@@ -38,11 +38,17 @@ securelint scan              # scan the current directory
 securelint scan src/         # scan one directory
 securelint scan app.py       # scan one file
 securelint scan src/ --format json > report.json
+securelint scan src/ --format html > report.html
 ```
 
 `--format json` writes the same result as a JSON document for other programs
 to read: a summary, then every finding with its rule, severity, confidence,
 path, line, column and message, and the files that could not be scanned.
+
+`--format html` writes one page to open in a browser: a summary, then the
+problems grouped by file. The page is a single file with its style inside. It
+contains no script and loads nothing from the network, and every file name and
+message is escaped before it is written into the page.
 
 The exit code tells a script or a CI job what happened:
 

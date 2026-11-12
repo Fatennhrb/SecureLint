@@ -1,9 +1,16 @@
-"""Turn a scan result into text for the terminal."""
+"""Turn a scan result into a report: text for people, JSON for programs."""
 
+import json
 from collections import Counter
+from typing import Any
 
+from securelint import __version__
 from securelint.engine import ScanResult
 from securelint.model import Severity
+
+JSON_FORMAT_VERSION = 1
+"""Raised when the JSON report changes in a way that could break a program
+reading it (a field removed or renamed). Adding a field does not count."""
 
 
 def format_text(result: ScanResult) -> str:
@@ -22,6 +29,54 @@ def format_text(result: ScanResult) -> str:
         lines.append("")
     lines.append(_summary(result))
     return "\n".join(lines)
+
+
+def format_json(result: ScanResult) -> str:
+    """Return the whole scan result as a JSON document.
+
+    It holds the same information as the text report, plus each finding's
+    confidence and the files that could not be scanned, so a program
+    reading it never has to parse sentences.
+    """
+    counts = Counter(finding.severity for finding in result.findings)
+    document: dict[str, Any] = {
+        "format_version": JSON_FORMAT_VERSION,
+        "tool": {"name": "securelint", "version": __version__},
+        "summary": {
+            "files_scanned": result.files_scanned,
+            "findings": len(result.findings),
+            # Every severity is listed, also with a count of zero, so a
+            # reader can use any of them without checking it is there.
+            "by_severity": {
+                severity.name.lower(): counts[severity]
+                for severity in sorted(Severity, reverse=True)
+            },
+            "failures": len(result.failures),
+        },
+        "findings": [
+            {
+                "rule_id": finding.rule_id,
+                "severity": finding.severity.name.lower(),
+                "confidence": finding.confidence.name.lower(),
+                "path": finding.path,
+                "line": finding.line,
+                "column": finding.column,
+                "message": finding.message,
+            }
+            for finding in result.findings
+        ],
+        "failures": [
+            {
+                "path": failure.relative_path,
+                "line": failure.line,
+                "message": failure.message,
+            }
+            for failure in result.failures
+        ],
+    }
+    # Characters outside ASCII are written as \u escapes (the default), so
+    # the report prints on any terminal whatever its encoding.
+    return json.dumps(document, indent=2)
 
 
 def _summary(result: ScanResult) -> str:

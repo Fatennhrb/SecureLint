@@ -1,8 +1,12 @@
-"""Tests for the terminal report."""
+"""Tests for the text and JSON reports."""
 
+import json
+
+from securelint import __version__
 from securelint.engine import ScanResult
 from securelint.model import Confidence, Finding, Severity
-from securelint.report import format_text
+from securelint.parsing import ParseFailure
+from securelint.report import format_json, format_text
 
 
 def finding(severity: Severity, line: int = 1) -> Finding:
@@ -63,3 +67,89 @@ def test_findings_keep_the_order_of_the_result() -> None:
         "pkg/app.py:2:5",
         "pkg/app.py:9:5",
     ]
+
+
+def test_json_report_of_a_clean_scan() -> None:
+    assert json.loads(format_json(result())) == {
+        "format_version": 1,
+        "tool": {"name": "securelint", "version": __version__},
+        "summary": {
+            "files_scanned": 3,
+            "findings": 0,
+            "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "failures": 0,
+        },
+        "findings": [],
+        "failures": [],
+    }
+
+
+def test_json_report_holds_every_field_of_a_finding() -> None:
+    document = json.loads(format_json(result(finding(Severity.HIGH, line=12))))
+
+    assert document["findings"] == [
+        {
+            "rule_id": "T001",
+            "severity": "high",
+            "confidence": "high",
+            "path": "pkg/app.py",
+            "line": 12,
+            "column": 5,
+            "message": "Example problem.",
+        }
+    ]
+
+
+def test_json_summary_counts_each_severity() -> None:
+    document = json.loads(
+        format_json(
+            result(
+                finding(Severity.LOW, line=1),
+                finding(Severity.CRITICAL, line=2),
+                finding(Severity.LOW, line=3),
+            )
+        )
+    )
+
+    assert document["summary"]["findings"] == 3
+    assert document["summary"]["by_severity"] == {
+        "critical": 1,
+        "high": 0,
+        "medium": 0,
+        "low": 2,
+    }
+    assert [item["line"] for item in document["findings"]] == [1, 2, 3]
+
+
+def test_json_report_lists_files_that_could_not_be_scanned() -> None:
+    failures = (
+        ParseFailure("broken.py", "invalid syntax", line=4),
+        ParseFailure("locked.py", "permission denied"),
+    )
+    scan_result = ScanResult(findings=(), failures=failures, files_scanned=1)
+
+    document = json.loads(format_json(scan_result))
+
+    assert document["summary"]["failures"] == 2
+    assert document["failures"] == [
+        {"path": "broken.py", "line": 4, "message": "invalid syntax"},
+        {"path": "locked.py", "line": None, "message": "permission denied"},
+    ]
+
+
+def test_json_report_uses_only_ascii_characters() -> None:
+    odd = Finding(
+        rule_id="T001",
+        message='Quote " and accent é.',
+        severity=Severity.LOW,
+        confidence=Confidence.LOW,
+        path="café/app.py",
+        line=1,
+        column=1,
+    )
+
+    report = format_json(result(odd))
+
+    assert report.isascii()
+    assert json.loads(report)["findings"][0]["path"] == "café/app.py"
+    assert json.loads(report)["findings"][0]["message"] == 'Quote " and accent é.'

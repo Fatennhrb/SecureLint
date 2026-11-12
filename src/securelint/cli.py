@@ -7,8 +7,11 @@ from pathlib import Path
 
 from securelint import __version__
 from securelint.engine import Rule, scan
-from securelint.report import format_text
+from securelint.report import format_json, format_text
 from securelint.rules import ALL_RULES
+
+# The report formats `scan --format` accepts, and the function behind each.
+FORMATS = {"text": format_text, "json": format_json}
 
 # Exit codes are how a CI job reads the result, so they are part of the
 # tool's public behaviour and must stay stable.
@@ -54,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path(),
         help="file or directory to scan (default: the current directory)",
     )
+    scan_parser.add_argument(
+        "--format",
+        choices=sorted(FORMATS),
+        default="text",
+        help="how to write the report (default: text)",
+    )
     return parser
 
 
@@ -66,12 +75,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "scan":
-        return _run_scan(args.path)
+        return _run_scan(args.path, args.format)
     parser.print_help()
     return EXIT_CLEAN
 
 
-def _run_scan(target: Path) -> int:
+def _run_scan(target: Path, report_format: str) -> int:
     try:
         result = scan(target, RULES)
     except OSError as error:
@@ -81,7 +90,7 @@ def _run_scan(target: Path) -> int:
 
     # The report goes to standard output; everything about the scan itself
     # goes to standard error, so `securelint scan > report.txt` stays clean.
-    print(format_text(result))
+    print(FORMATS[report_format](result))
     for failure in result.failures:
         place = failure.relative_path
         if failure.line is not None:

@@ -1,6 +1,7 @@
 """Tests for the command-line entry points."""
 
 import ast
+import json
 import subprocess
 import sys
 from collections.abc import Iterable
@@ -176,3 +177,50 @@ def test_scan_command_runs_as_a_real_process(tmp_path: Path) -> None:
     assert result.returncode == 2
     assert result.stdout == ""
     assert "no such file or directory" in result.stderr
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_json_format_prints_a_json_document(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "app.py").write_text("x = 1\ny = eval(x)\n", encoding="utf-8")
+
+    assert main(["scan", str(tmp_path), "--format", "json"]) == 1
+
+    captured = capsys.readouterr()
+    document = json.loads(captured.out)
+    assert document["summary"]["findings"] == 1
+    assert document["findings"][0]["rule_id"] == "T001"
+    assert (document["findings"][0]["line"], document["findings"][0]["column"]) == (
+        2,
+        5,
+    )
+    assert captured.err == ""
+
+
+@pytest.mark.usefixtures("eval_rule")
+def test_scan_json_format_keeps_the_exit_codes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "app.py").write_text("print('safe')\n", encoding="utf-8")
+    assert main(["scan", str(tmp_path), "--format", "json"]) == 0
+    assert json.loads(capsys.readouterr().out)["findings"] == []
+
+    (tmp_path / "broken.py").write_text("def oops(:\n", encoding="utf-8")
+    assert main(["scan", str(tmp_path), "--format", "json"]) == 2
+
+    captured = capsys.readouterr()
+    # Standard output is still one valid JSON document; the failure is in it
+    # and also on standard error.
+    assert json.loads(captured.out)["failures"][0]["path"] == "broken.py"
+    assert "securelint: cannot scan broken.py:1:" in captured.err
+
+
+def test_scan_unknown_format_is_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["scan", str(tmp_path), "--format", "xml"])
+
+    assert exc_info.value.code == 2
+    assert "invalid choice: 'xml'" in capsys.readouterr().err

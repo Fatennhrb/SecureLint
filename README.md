@@ -37,7 +37,12 @@ securelint --version
 securelint scan              # scan the current directory
 securelint scan src/         # scan one directory
 securelint scan app.py       # scan one file
+securelint scan src/ --format json > report.json
 ```
+
+`--format json` writes the same result as a JSON document for other programs
+to read: a summary, then every finding with its rule, severity, confidence,
+path, line, column and message, and the files that could not be scanned.
 
 The exit code tells a script or a CI job what happened:
 

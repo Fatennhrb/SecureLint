@@ -3,8 +3,10 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
-**Status:** early. `securelint scan` finds the Python files in a project, parses
-them and checks them against the rules listed below. There are five rules so far.
+**Status:** version 0.1.0, the first release. `securelint scan` finds the Python
+files in a project, parses them and checks them against the five rules listed
+below, then writes a text, JSON or HTML report. See the
+[changelog](CHANGELOG.md) for what each version contains.
 
 ## Requirements
 

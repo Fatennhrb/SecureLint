@@ -63,7 +63,7 @@ select = [
 # Check against the oldest supported Python, so code that only works on a
 # newer version fails here instead of on a user's machine.
 python_version = "3.11"
-files = ["src", "tests"]
+files = ["src", "tests", "benchmarks"]
 exclude = ["^tests/corpus/"]
 strict = true
 warn_unreachable = true

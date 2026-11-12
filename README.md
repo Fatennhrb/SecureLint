@@ -92,6 +92,25 @@ numbers show what works and what does not today, not results on real projects.
 Scanning this repository itself reports the corpus files, since they contain
 dangerous code on purpose.
 
+## How fast is it?
+
+Measured by scanning Python's own standard library with all five rules
+(`python benchmarks/scan_speed.py`), keeping the fastest of five runs:
+
+| | |
+|---|---|
+| Code scanned | 3,659 files, 58.6 MB |
+| Time | 12.25 s |
+| Speed | 299 files per second (4.8 MB per second) |
+| Measured with | SecureLint 0.1.0.dev0, Python 3.13.5, Windows 11, on 2026-11-12 |
+
+This is one laptop, so the number is a reference point for later versions and
+not a promise. The very first scan of files the system has not read recently
+was much slower (131 s in this measurement), because the time then goes to
+reading from the disk. A profile shows about half of the scan time is spent
+walking the syntax trees and about a quarter parsing the files; the rules
+themselves are a small part.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

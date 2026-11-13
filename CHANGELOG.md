@@ -14,6 +14,9 @@ What changed in each version of SecureLint, newest first.
   that file, and fixed pieces put together (`"ls " + "-l"`, an f-string of
   fixed values, `", ".join("?" for _ in ids)`) count as fixed. This removes
   false alarms.
+- A finding whose value comes from a web request, `input()`, `sys.argv` or
+  `sys.stdin` is reported with high confidence, and its message says where
+  the value comes from and on which line.
 - Corpus: 54 dangerous lines reported (was 50), 9 missed (was 13), 4 safe
   lines reported by mistake (was 8).
 

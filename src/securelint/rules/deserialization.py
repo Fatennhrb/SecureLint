@@ -7,6 +7,7 @@ from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
 from securelint.rules._helpers import is_fixed
+from securelint.rules._sources import find_source, with_source
 
 # Formats that can describe "call this function" as part of the data.
 _PICKLE_LIKE = frozenset(
@@ -79,6 +80,9 @@ class UnsafeDeserialization(Rule):
         else:
             return []
 
+        message, confidence = with_source(
+            message, confidence, find_source(node.args[0], context)
+        )
         return [
             Finding(
                 rule_id=self.rule_id,

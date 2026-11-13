@@ -107,6 +107,24 @@ def find(cursor, ids):
 os.system("ls " + "-l")
 ```
 
+### Confidence
+
+Every finding has a confidence: how sure SecureLint is that the problem is
+real. It is shown in the JSON and HTML reports.
+
+Most findings are **medium**: the value is not fixed, but SecureLint cannot see
+where it comes from. A finding becomes **high** when the value is followed back
+to a place where outside data enters the program: a web request
+(`request.args`, `request.form`, `request.GET`...), `input()`, `sys.argv` or
+`sys.stdin`. The message then says where:
+
+```python
+name = request.args["name"]
+query = f"SELECT * FROM users WHERE name = '{name}'"
+cursor.execute(query)
+# ... Here the value comes from request.args on line 1.
+```
+
 ## How well does it detect?
 
 The rules are measured against a set of annotated example files in

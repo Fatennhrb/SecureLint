@@ -8,6 +8,7 @@ from securelint.context import MAX_HOPS, FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
 from securelint.rules._helpers import is_fixed
+from securelint.rules._sources import find_source, with_source
 
 # Methods that send a query to a database. A cursor is an ordinary object,
 # so there is no import to follow: the method is recognised by its name,
@@ -69,19 +70,21 @@ class SqlInjection(Rule):
         if not has_values or _SQL_WORD.search(text) is None:
             return []
 
+        # The value may be one the program controls, such as a table name
+        # from its own settings, unless it is found to come from a user.
+        message, confidence = with_source(
+            f"{method}() is given an SQL query with values put into its text; "
+            "a value can then change the query. Keep the query fixed and pass "
+            'the values separately: "... WHERE id = ?", (value,).',
+            Confidence.MEDIUM,
+            find_source(query, context),
+        )
         return [
             Finding(
                 rule_id=self.rule_id,
-                message=(
-                    f"{method}() is given an SQL query with values put into "
-                    "its text; a value can then change the query. Keep the "
-                    'query fixed and pass the values separately: "... WHERE '
-                    'id = ?", (value,).'
-                ),
+                message=message,
                 severity=Severity.HIGH,
-                # The value may be one the program controls, such as a
-                # table name from its own settings.
-                confidence=Confidence.MEDIUM,
+                confidence=confidence,
                 path=context.path,
                 line=node.lineno,
                 column=node.col_offset + 1,

@@ -7,6 +7,7 @@ from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
 from securelint.rules._helpers import is_fixed
+from securelint.rules._sources import find_source, with_source
 
 # These always hand their command to the shell.
 _ALWAYS_SHELL = frozenset(
@@ -71,18 +72,20 @@ class ShellCommandInjection(Rule):
         command = _command_argument(node)
         if command is None or is_fixed(command, context):
             return []
+        # The rule sees that the command is not fixed. Unless it also
+        # finds where a part comes from, it cannot be fully sure.
+        message, confidence = with_source(
+            f"{label} runs its command through the shell; if any part of the "
+            "command can come from a user, they can run their own commands.",
+            Confidence.MEDIUM,
+            find_source(command, context),
+        )
         return [
             Finding(
                 rule_id=self.rule_id,
-                message=(
-                    f"{label} runs its command through the shell; if any part "
-                    "of the command can come from a user, they can run their "
-                    "own commands."
-                ),
+                message=message,
                 severity=Severity.HIGH,
-                # The rule sees that the command is not fixed, but not where
-                # its parts come from, so it cannot be fully sure.
-                confidence=Confidence.MEDIUM,
+                confidence=confidence,
                 path=context.path,
                 line=node.lineno,
                 column=node.col_offset + 1,

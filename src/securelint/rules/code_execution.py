@@ -7,6 +7,7 @@ from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
 from securelint.rules._helpers import is_fixed
+from securelint.rules._sources import find_source, with_source
 
 _DANGEROUS_BUILTINS = frozenset({"eval", "exec", "builtins.eval", "builtins.exec"})
 
@@ -43,18 +44,20 @@ class DynamicCodeExecution(Rule):
         # fixed when the program is written, so it cannot be an attack.
         if not node.args or is_fixed(node.args[0], context):
             return []
+        # The rule sees that the argument is not fixed. Unless it also
+        # finds where the value comes from, it cannot be fully sure.
+        message, confidence = with_source(
+            f"{name.removeprefix('builtins.')}() runs its argument as Python "
+            "code; if that value can come from a user, they can run any code.",
+            Confidence.MEDIUM,
+            find_source(node.args[0], context),
+        )
         return [
             Finding(
                 rule_id=self.rule_id,
-                message=(
-                    f"{name.removeprefix('builtins.')}() runs its argument as "
-                    "Python code; "
-                    "if that value can come from a user, they can run any code."
-                ),
+                message=message,
                 severity=Severity.HIGH,
-                # The rule sees that the argument is not fixed, but not where
-                # it comes from, so it cannot be fully sure.
-                confidence=Confidence.MEDIUM,
+                confidence=confidence,
                 path=context.path,
                 line=node.lineno,
                 column=node.col_offset + 1,

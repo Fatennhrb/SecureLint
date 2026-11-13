@@ -14,6 +14,11 @@ exactly once in the function (or class body, or module) where it is read.
 A variable assigned twice, changed with ``+=``, filled by a loop or
 received as a parameter has no single value, and is left alone. Giving no
 answer is always safe; giving a wrong one could hide a real problem.
+
+A variable that the function does not assign at all is looked for the way
+Python does it: in the functions around it, then at the top of the file.
+So ``TABLE = "users"`` written once at the top of a file is known inside
+every function of that file.
 """
 
 import ast
@@ -49,6 +54,12 @@ class _Scope:
     reads: list[ast.Name] = field(default_factory=list)
     """Every place where a variable is read."""
 
+    parent: "_Scope | None" = None
+    """The scope this one is written inside; ``None`` for the module."""
+
+    is_class: bool = False
+    """A class body. Its variables are not visible from its methods."""
+
     def bind(self, name: str, value: ast.expr | None = None) -> None:
         self.bindings.setdefault(name, []).append(value)
 
@@ -72,10 +83,10 @@ def analyse(tree: ast.Module) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
     # function, so no single scope shows everything that happens to them.
     shared: set[str] = set()
 
-    waiting: list[ast.AST] = [tree]
+    waiting: list[tuple[ast.AST, _Scope | None]] = [(tree, None)]
     while waiting:
-        scope_node = waiting.pop()
-        scope = _Scope()
+        scope_node, parent = waiting.pop()
+        scope = _Scope(parent=parent, is_class=isinstance(scope_node, ast.ClassDef))
         for parameter in _parameters(scope_node):
             scope.bind(parameter)
         _read_scope(scope_node, scope, shared, nodes, waiting)
@@ -86,10 +97,29 @@ def analyse(tree: ast.Module) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
         for read in scope.reads:
             if read.id in shared:
                 continue
-            bound = scope.bindings.get(read.id)
-            if bound is not None and len(bound) == 1 and bound[0] is not None:
-                values[read] = bound[0]
+            value = _lookup(read.id, scope)
+            if value is not None:
+                values[read] = value
     return nodes, values
+
+
+def _lookup(name: str, scope: _Scope) -> ast.expr | None:
+    """Find the one certain value of a name read in ``scope``, if it has one.
+
+    The scopes are tried in the order Python uses: the scope itself, then
+    each scope around it. The first one that gives the name a value
+    decides, even when the answer is "not certain".
+    """
+    current: _Scope | None = scope
+    while current is not None:
+        # A method does not see the variables of its class body; only code
+        # written directly in the class body does.
+        if current is scope or not current.is_class:
+            bound = current.bindings.get(name)
+            if bound is not None:
+                return bound[0] if len(bound) == 1 else None
+        current = current.parent
+    return None
 
 
 def collect_values(tree: ast.Module) -> dict[ast.Name, ast.expr]:
@@ -102,7 +132,7 @@ def _read_scope(
     scope: _Scope,
     shared: set[str],
     nodes: list[ast.AST],
-    waiting: list[ast.AST],
+    waiting: list[tuple[ast.AST, _Scope | None]],
 ) -> None:
     """Walk one scope: record its nodes, its bindings and its reads.
 
@@ -149,7 +179,7 @@ def _read_scope(
         elif kind in _SCOPE_TYPES:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
                 scope.bind(node.name)
-            waiting.append(node)
+            waiting.append((node, scope))
 
         fields = _FIELDS_TO_FOLLOW.get(kind)
         if fields is None:

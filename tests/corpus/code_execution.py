@@ -43,7 +43,7 @@ def fixed_expression():
 
 
 def fixed_in_two_parts():
-    return eval("2 + " + "2")  # false-alarm: SL101
+    return eval("2 + " + "2")
 
 
 def model_in_evaluation_mode(model):

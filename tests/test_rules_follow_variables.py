@@ -243,3 +243,86 @@ def test_does_not_report_a_harmless_function_kept_in_a_variable(
     tmp_path: Path, code: str
 ) -> None:
     assert reported(tmp_path, code) == []
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # A value set once at the top of the file.
+        (
+            'TABLE = "users"\n\n'
+            "def find(cursor, user_id):\n"
+            '    cursor.execute(f"SELECT * FROM {TABLE} WHERE id = ?", (user_id,))\n'
+        ),
+        'COMMAND = "ls -l"\n\ndef f():\n    os.system(COMMAND)\n',
+        (
+            'QUERY = "SELECT * FROM users"\n\n'
+            "class Store:\n"
+            "    def everyone(self, cursor):\n"
+            "        cursor.execute(QUERY)\n"
+        ),
+        # Fixed pieces put together.
+        'os.system("ls " + "-l")\n',
+        'eval("2 + " + "2")\n',
+        'os.system("ls %s" % "-l")\n',
+        'FLAGS = "-l"\nos.system(f"ls {FLAGS}")\n',
+        'FLAGS = "-l"\nos.system("ls " + FLAGS)\n',
+        'WIDTH = 8\nos.system(f"printf %{WIDTH}s hello")\n',
+        # One "?" for each value: the text can only hold "?" and ", ".
+        (
+            "def find(cursor, ids):\n"
+            '    marks = ", ".join("?" for _ in ids)\n'
+            '    cursor.execute(f"SELECT * FROM users WHERE id IN ({marks})", ids)\n'
+        ),
+        (
+            "def find(cursor, ids):\n"
+            '    marks = ", ".join(["?" for _ in ids])\n'
+            '    cursor.execute("SELECT * FROM users WHERE id IN (%s)" % marks, ids)\n'
+        ),
+        'os.system(" ".join(["ls", "-l"]))\n',
+    ],
+)
+def test_does_not_report_values_made_only_of_fixed_pieces(
+    tmp_path: Path, code: str
+) -> None:
+    assert reported(tmp_path, code) == []
+
+
+@pytest.mark.parametrize(
+    ("code", "rule_id"),
+    [
+        # One piece is not fixed.
+        ('def f(flags):\n    os.system("ls " + flags)\n', "SL102"),
+        ('def f(flags):\n    os.system(f"ls {flags}")\n', "SL102"),
+        ('def f(flags):\n    os.system("ls %s" % flags)\n', "SL102"),
+        ('def f(names):\n    os.system(" ".join(names))\n', "SL102"),
+        ('def f(names):\n    os.system(" ".join(n for n in names))\n', "SL102"),
+        ('def f(sep):\n    os.system(sep.join(["ls", "-l"]))\n', "SL102"),
+        ('def f(width):\n    os.system(f"printf %{8:{width}}s")\n', "SL102"),
+        # The file-level value is not certain.
+        (
+            'TABLE = "users"\nTABLE = read_setting()\n\n'
+            "def find(cursor):\n"
+            '    cursor.execute(f"SELECT * FROM {TABLE}")\n',
+            "SL105",
+        ),
+        # The function's own variable hides the file-level one.
+        (
+            'TABLE = "users"\n\n'
+            "def find(cursor, TABLE):\n"
+            '    cursor.execute(f"SELECT * FROM {TABLE}")\n',
+            "SL105",
+        ),
+        # The values are fixed, but the names are joined into the query.
+        (
+            "def find(cursor, columns):\n"
+            '    chosen = ", ".join(columns)\n'
+            '    cursor.execute(f"SELECT {chosen} FROM users")\n',
+            "SL105",
+        ),
+    ],
+)
+def test_still_reports_when_one_piece_is_not_fixed(
+    tmp_path: Path, code: str, rule_id: str
+) -> None:
+    assert [found for _, found in reported(tmp_path, code)] == [rule_id]

@@ -101,12 +101,58 @@ def test_variable_without_one_certain_value_has_none(code: str) -> None:
     assert value_of(code, "x") is None
 
 
-def test_a_variable_of_the_module_is_not_followed_into_a_function_yet() -> None:
-    # The value is certain here too, but looking outside the function where
-    # the variable is read is not done yet.
-    code = "x = 'ls'\n\ndef f():\n    use(x)\n"
+@pytest.mark.parametrize(
+    "code",
+    [
+        # Set once at the top of the file, read in a function.
+        "x = 'ls'\n\ndef f():\n    use(x)\n",
+        "def f():\n    use(x)\n\nx = 'ls'\n",
+        "x = 'ls'\n\nasync def f():\n    await use(x)\n",
+        "x = 'ls'\n\nf = lambda: use(x)\n",
+        # Read in a method: the class body in between is skipped.
+        "x = 'ls'\n\nclass A:\n    def m(self):\n        use(x)\n",
+        # Read in a class body.
+        "x = 'ls'\n\nclass A:\n    y = use(x)\n",
+        # Set once in a function, read in a function written inside it.
+        "def f():\n    x = 'ls'\n    def g():\n        use(x)\n",
+        "def f():\n    x = 'ls'\n    return lambda: use(x)\n",
+        # Two levels up.
+        "x = 'ls'\n\ndef f():\n    def g():\n        use(x)\n",
+    ],
+)
+def test_variable_set_once_outside_the_function_has_a_value(code: str) -> None:
+    assert value_of(code, "x") == "'ls'"
 
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # Set twice at the top of the file.
+        "x = 'a'\nx = 'b'\n\ndef f():\n    use(x)\n",
+        "x = 'a'\nx += b\n\ndef f():\n    use(x)\n",
+        # The function has its own variable of that name.
+        "x = 'ls'\n\ndef f(x):\n    use(x)\n",
+        "x = 'ls'\n\ndef f(items):\n    for x in items:\n        use(x)\n",
+        "x = 'ls'\n\ndef f():\n    x = read()\n    x = clean(x)\n    use(x)\n",
+        # A function in between has its own variable of that name.
+        "x = 'ls'\n\ndef f(x):\n    def g():\n        use(x)\n",
+        # A class variable is not visible from a method.
+        "class A:\n    x = 'ls'\n    def m(self):\n        use(x)\n",
+        # Changed by a function.
+        "x = 'ls'\n\ndef g():\n    global x\n    x = read()\n\ndef f():\n    use(x)\n",
+        # Set in a function that is not around the one reading it.
+        "def g():\n    x = 'ls'\n\ndef f():\n    use(x)\n",
+    ],
+)
+def test_variable_not_certain_outside_the_function_has_none(code: str) -> None:
     assert value_of(code, "x") is None
+
+
+def test_the_nearest_scope_decides() -> None:
+    # The method reads the file's x, not the class's x.
+    code = "x = 'file'\n\nclass A:\n    x = 'class'\n    def m(self):\n        use(x)\n"
+
+    assert value_of(code, "x") == "'file'"
 
 
 def test_each_read_gets_its_own_answer() -> None:

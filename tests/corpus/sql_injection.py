@@ -74,12 +74,12 @@ def everyone(cursor):
 
 
 def own_table_name(cursor, user_id):
-    cursor.execute(f"SELECT * FROM {TABLE} WHERE id = ?", (user_id,))  # false-alarm: SL105
+    cursor.execute(f"SELECT * FROM {TABLE} WHERE id = ?", (user_id,))
 
 
 def one_mark_per_value(cursor, ids):
     marks = ", ".join("?" for _ in ids)
-    cursor.execute(f"SELECT * FROM users WHERE id IN ({marks})", ids)  # false-alarm: SL105
+    cursor.execute(f"SELECT * FROM users WHERE id IN ({marks})", ids)
 
 
 def not_a_database(executor, number):

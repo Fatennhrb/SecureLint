@@ -10,7 +10,12 @@ What changed in each version of SecureLint, newest first.
   only when the variable is assigned exactly once.
 - A function kept in a variable is followed: after `run = os.system`,
   `run(command)` is checked as `os.system(command)`.
-- Corpus: 54 dangerous lines reported (was 50), 9 missed (was 13).
+- A value set once at the top of a file is known inside the functions of
+  that file, and fixed pieces put together (`"ls " + "-l"`, an f-string of
+  fixed values, `", ".join("?" for _ in ids)`) count as fixed. This removes
+  false alarms.
+- Corpus: 54 dangerous lines reported (was 50), 9 missed (was 13), 4 safe
+  lines reported by mistake (was 8).
 
 ## 0.1.0 (2026-11-12)
 

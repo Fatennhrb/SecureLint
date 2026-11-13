@@ -78,7 +78,7 @@ def fixed_pipeline():
 
 
 def fixed_in_two_parts():
-    os.system("ls " + "-l")  # false-alarm: SL102
+    os.system("ls " + "-l")
 
 
 def quoted(host):

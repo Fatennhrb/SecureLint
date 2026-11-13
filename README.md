@@ -92,6 +92,21 @@ This is done only when the variable is assigned exactly once. A variable
 assigned twice, changed with `+=`, or received as a parameter has no single
 value, and is treated as before.
 
+A value set once at the top of a file is known inside every function of that
+file, and fixed pieces put together are still fixed. None of these is reported:
+
+```python
+TABLE = "users"
+
+
+def find(cursor, ids):
+    marks = ", ".join("?" for _ in ids)  # only "?" and ", ", however many
+    cursor.execute(f"SELECT * FROM {TABLE} WHERE id IN ({marks})", ids)
+
+
+os.system("ls " + "-l")
+```
+
 ## How well does it detect?
 
 The rules are measured against a set of annotated example files in
@@ -102,12 +117,12 @@ including the ones SecureLint does not find yet.
 |---|---:|
 | Dangerous lines reported | 54 |
 | Dangerous lines missed | 9 |
-| Safe lines reported by mistake | 8 |
+| Safe lines reported by mistake | 4 |
 
 The misses are cases the scanner cannot follow yet, such as a shell started
 by hand (`subprocess.run(["sh", "-c", command])`) or a password inside a
 database address.
-Version 0.1.0 reported 50 and missed 13. These examples were written for this
+Version 0.1.0 reported 50, missed 13 and had 8 false alarms. These examples were written for this
 project, so the
 numbers show what works and what does not today, not results on real projects.
 

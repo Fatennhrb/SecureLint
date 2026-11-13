@@ -1,3 +1,3 @@
 """SecureLint: a security scanner and CI policy gate for Python projects."""
 
-__version__ = "0.2.0.dev0"
+__version__ = "0.2.0"

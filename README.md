@@ -3,9 +3,10 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
-**Status:** version 0.1.0, the first release. `securelint scan` finds the Python
-files in a project, parses them and checks them against the five rules listed
-below, then writes a text, JSON or HTML report. See the
+**Status:** version 0.2.0. `securelint scan` finds the Python files in a
+project, parses them and checks them against the five rules listed below,
+following values through variables, then writes a text, JSON or HTML report.
+See the
 [changelog](CHANGELOG.md) for what each version contains.
 
 ## Requirements
@@ -152,19 +153,24 @@ dangerous code on purpose.
 Measured by scanning Python's own standard library with all five rules
 (`python benchmarks/scan_speed.py`), keeping the fastest of five runs:
 
-| | |
-|---|---|
-| Code scanned | 3,659 files, 58.6 MB |
-| Time | 12.25 s |
-| Speed | 299 files per second (4.8 MB per second) |
-| Measured with | SecureLint 0.1.0.dev0, Python 3.13.5, Windows 11, on 2026-11-12 |
+| | Version 0.1.0 | Version 0.2.0 |
+|---|---|---|
+| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
+| Time | 12.25 s | 11.64 s |
+| Speed | 299 files per second | 314 files per second |
+| Measured on | 2026-11-12 | 2026-11-13 |
 
-This is one laptop, so the number is a reference point for later versions and
-not a promise. The very first scan of files the system has not read recently
-was much slower (131 s in this measurement), because the time then goes to
-reading from the disk. A profile shows about half of the scan time is spent
-walking the syntax trees and about a quarter parsing the files; the rules
-themselves are a small part.
+Both were measured on the same laptop with Python 3.13.5 on Windows 11.
+
+Version 0.2.0 does more work for each file, because it follows values through
+variables, yet it is not slower. A first attempt at that feature walked every
+file twice and took 25 s; this benchmark showed it, and the two walks were
+merged into one.
+
+This is one laptop, so the numbers are a reference point for later versions
+and not a promise. The very first scan of files the system has not read
+recently is much slower (131 s when version 0.1.0 was measured), because the
+time then goes to reading from the disk.
 
 ## License
 

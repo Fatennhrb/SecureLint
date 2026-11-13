@@ -61,6 +61,31 @@ The exit code tells a script or a CI job what happened:
 | 1 | The scan finished and found at least one problem. |
 | 2 | The scan could not be completed: wrong command line, a path that does not exist, or a file that could not be read or parsed. |
 
+## Settings
+
+SecureLint reads its settings from the project's `pyproject.toml`:
+
+```toml
+[tool.securelint]
+exclude = ["tests/fixtures", "docs/examples.py"]
+ignore = ["SL104"]
+```
+
+| Setting | Meaning |
+|---------|---------|
+| `exclude` | Files and directories to leave out. Paths are relative to the `pyproject.toml`. |
+| `ignore` | Rules to turn off, by id. |
+
+The file is looked for in the scanned directory, then in the directories above
+it, up to the top of the Git repository. When settings are used, SecureLint
+says so on standard error.
+
+A file or directory named on the command line is always scanned, even if the
+settings exclude it: `securelint scan tests/fixtures` scans that folder.
+
+A mistake in the settings stops the scan with exit code 2: an unknown setting,
+an unknown rule or a wrong type is an error, never skipped silently.
+
 ## Rules
 
 | ID | Severity | What it reports |
@@ -145,8 +170,8 @@ Version 0.1.0 reported 50, missed 13 and had 8 false alarms. These examples were
 project, so the
 numbers show what works and what does not today, not results on real projects.
 
-Scanning this repository itself reports the corpus files, since they contain
-dangerous code on purpose.
+The corpus files contain dangerous code on purpose, so this repository's own
+settings leave that folder out of a normal scan.
 
 ## How fast is it?
 

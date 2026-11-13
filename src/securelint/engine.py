@@ -6,7 +6,7 @@ and shows every node of the syntax tree to the rules that asked for it.
 
 import ast
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
@@ -24,6 +24,9 @@ class Rule(ABC):
     A rule says which kinds of syntax-tree node it wants to see, and the
     engine calls ``check`` once for each such node.
     """
+
+    rule_id: ClassVar[str]
+    """The rule's short name, e.g. ``"SL101"``, used in reports and settings."""
 
     node_types: ClassVar[tuple[type[ast.AST], ...]]
     """The node classes this rule inspects, e.g. ``(ast.Call,)``."""
@@ -52,8 +55,12 @@ class ScanResult:
     """Number of files that were parsed and checked."""
 
 
-def scan(target: Path, rules: Sequence[Rule]) -> ScanResult:
+def scan(
+    target: Path, rules: Sequence[Rule], exclude: Collection[Path] = ()
+) -> ScanResult:
     """Scan the file or directory ``target`` with ``rules``.
+
+    ``exclude`` holds full paths of files and directories to leave out.
 
     Raises ``FileNotFoundError`` if ``target`` does not exist.
     """
@@ -66,7 +73,7 @@ def scan(target: Path, rules: Sequence[Rule]) -> ScanResult:
     findings: list[Finding] = []
     failures: list[ParseFailure] = []
     files_scanned = 0
-    for source_file in discover(target):
+    for source_file in discover(target, exclude):
         result = parse(source_file)
         if isinstance(result, ParseFailure):
             failures.append(result)

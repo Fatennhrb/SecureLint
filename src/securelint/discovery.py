@@ -1,5 +1,6 @@
 """Find the Python files to scan."""
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,12 +22,16 @@ class SourceFile:
     forward slashes, so it is the same on Windows and Linux."""
 
 
-def discover(target: Path) -> list[SourceFile]:
+def discover(target: Path, exclude: Collection[Path] = ()) -> list[SourceFile]:
     """Return the Python files under ``target``, sorted by relative path.
 
     ``target`` is a directory to search, or a single file. A file named
     directly is always returned, whatever its extension, because the user
     asked for it.
+
+    ``exclude`` holds full paths of files and directories to leave out.
+    It applies to what the search finds on its way, never to ``target``
+    itself: asking for an excluded directory by name scans it.
 
     Symbolic links are not followed. A link can point outside the scanned
     directory or back to one of its own parents, and a scanner run on
@@ -39,6 +44,11 @@ def discover(target: Path) -> list[SourceFile]:
     if not target.is_dir():
         raise FileNotFoundError(f"no such file or directory: {target}")
 
+    # An excluded path that contains the target would exclude everything
+    # the user just asked for, so it is dropped.
+    root = target.resolve()
+    excluded = {path for path in exclude if not root.is_relative_to(path)}
+
     found: list[SourceFile] = []
     # A list of directories still to visit, instead of a recursive function:
     # a very deeply nested tree then cannot hit Python's recursion limit.
@@ -47,6 +57,8 @@ def discover(target: Path) -> list[SourceFile]:
         directory = pending.pop()
         for entry in directory.iterdir():
             if entry.is_symlink():
+                continue
+            if excluded and root / entry.relative_to(target) in excluded:
                 continue
             if entry.is_dir():
                 if not _is_skipped(entry):

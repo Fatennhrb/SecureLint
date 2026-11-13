@@ -19,6 +19,7 @@ from securelint.model import Confidence, Finding, Severity
 class EvalRule(Rule):
     """A stand-in rule: reports every call to a function named ``eval``."""
 
+    rule_id = "T001"
     node_types = (ast.Call,)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:

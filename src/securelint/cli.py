@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from securelint import __version__
+from securelint.config import ConfigError, load_config
 from securelint.engine import Rule, scan
 from securelint.html_report import format_html
 from securelint.report import format_json, format_text
@@ -83,7 +84,19 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _run_scan(target: Path, report_format: str) -> int:
     try:
-        result = scan(target, RULES)
+        config = load_config(target, [rule.rule_id for rule in RULES])
+    except ConfigError as error:
+        # Settings that cannot be trusted stop the scan: guessing what
+        # they meant could leave out files the user wanted checked.
+        _print_error(f"error: {error}")
+        return EXIT_ERROR
+    if config.source is not None:
+        # Settings can make a scan look at less, so their use is never silent.
+        _print_error(f"using settings from {config.source}")
+    rules = [rule for rule in RULES if rule.rule_id not in config.ignore]
+
+    try:
+        result = scan(target, rules, config.exclude)
     except OSError as error:
         # The target does not exist, or a directory cannot be opened.
         _print_error(f"error: {error}")

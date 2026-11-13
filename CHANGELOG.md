@@ -2,6 +2,12 @@
 
 What changed in each version of SecureLint, newest first.
 
+## Unreleased
+
+- Settings in `pyproject.toml`: `exclude` leaves files and directories out
+  of a scan, `ignore` turns rules off. A mistake in the settings stops the
+  scan instead of being skipped.
+
 ## 0.2.0 (2026-11-13)
 
 Data-flow analysis: the rules follow a value from where it is created to

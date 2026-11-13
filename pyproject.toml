@@ -29,6 +29,10 @@ securelint = "securelint.cli:main"
 [tool.hatch.version]
 path = "src/securelint/__init__.py"
 
+[tool.securelint]
+# The corpus is dangerous code on purpose (see tests/corpus/README.md).
+exclude = ["tests/corpus"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

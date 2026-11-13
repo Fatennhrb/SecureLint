@@ -47,7 +47,7 @@ def django_raw(user_id):
 
 def built_on_another_line(cursor, name):
     query = f"SELECT * FROM users WHERE name = '{name}'"
-    cursor.execute(query)  # missed: SL105
+    cursor.execute(query)  # expect: SL105
 
 
 def with_pandas(connection, city):
@@ -88,3 +88,8 @@ def not_a_database(executor, number):
 
 def only_logged(logger, user_id):
     logger.info(f"SELECT * FROM users WHERE id = {user_id}")
+
+
+def fixed_query_in_a_variable(cursor):
+    query = "SELECT * FROM users ORDER BY name"
+    cursor.execute(query)

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from securelint.context import FileContext
+from securelint.dataflow import analyse
 from securelint.engine import Rule, scan
 from securelint.model import Confidence, Finding, Severity
 
@@ -149,14 +150,18 @@ def test_tree_is_walked_once_per_file_whatever_the_number_of_rules(
     write(tmp_path / "a.py", "eval(x)\n")
     write(tmp_path / "b.py", "assert y\n")
     walks = 0
-    real_walk = ast.walk
 
-    def counting_walk(node: ast.AST) -> Iterable[ast.AST]:
+    def counting_analyse(
+        tree: ast.Module,
+    ) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
         nonlocal walks
         walks += 1
-        return real_walk(node)
+        return analyse(tree)
 
-    monkeypatch.setattr(ast, "walk", counting_walk)
+    # analyse() is the one place that walks a tree; ast.walk must not be
+    # used next to it.
+    monkeypatch.setattr("securelint.engine.analyse", counting_analyse)
+    monkeypatch.delattr(ast, "walk")
 
     scan(tmp_path, [EvalRule(), AssertRule(), EvalRule()])
 

@@ -26,8 +26,8 @@ test fails until `missed` is changed to `expect`, or `false-alarm` is removed.
 | SL102 | 10 | 3 | 2 |
 | SL103 | 12 | 2 | 1 |
 | SL104 | 11 | 5 | 2 |
-| SL105 | 10 | 2 | 2 |
-| **Total** | **50** | **13** | **8** |
+| SL105 | 11 | 1 | 2 |
+| **Total** | **51** | **12** | **8** |
 
 The same numbers are in `TOTALS` in the test, which fails if they stop
 being true.

@@ -74,6 +74,21 @@ Rules follow imports, so a function is recognised under any name the file gives
 it: `import subprocess as sp`, `from os import system` and
 `from os import system as sh` are all understood.
 
+Rules also look through a variable to the value it was given, inside one
+function:
+
+```python
+query = f"SELECT * FROM users WHERE name = '{name}'"
+cursor.execute(query)  # reported: the query is built from a value
+
+command = "ls -l"
+os.system(command)  # not reported: the command is fixed
+```
+
+This is done only when the variable is assigned exactly once. A variable
+assigned twice, changed with `+=`, or received as a parameter has no single
+value, and is treated as before.
+
 ## How well does it detect?
 
 The rules are measured against a set of annotated example files in
@@ -82,13 +97,14 @@ including the ones SecureLint does not find yet.
 
 | | Count |
 |---|---:|
-| Dangerous lines reported | 50 |
-| Dangerous lines missed | 13 |
+| Dangerous lines reported | 51 |
+| Dangerous lines missed | 12 |
 | Safe lines reported by mistake | 8 |
 
-The misses are mostly values that pass through a variable before reaching the
-dangerous call (`query = f"..."` then `cursor.execute(query)`), which the
-scanner cannot follow yet. These examples were written for this project, so the
+The misses are cases the scanner cannot follow yet, such as a dangerous
+function kept under another name (`run = os.system`, then `run(command)`).
+Version 0.1.0 reported 50 and missed 13. These examples were written for this
+project, so the
 numbers show what works and what does not today, not results on real projects.
 
 Scanning this repository itself reports the corpus files, since they contain

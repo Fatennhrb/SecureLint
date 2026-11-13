@@ -56,7 +56,7 @@ class UnsafeDeserialization(Rule):
         if name is None:
             return []
         # Data written in the source itself cannot be changed by anyone.
-        if not node.args or is_fixed(node.args[0]):
+        if not node.args or is_fixed(node.args[0], context):
             return []
 
         if name in _PICKLE_LIKE:

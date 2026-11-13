@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from securelint.context import FileContext, collect_imports
+from securelint.dataflow import analyse
 from securelint.discovery import discover
 from securelint.model import Finding
 from securelint.parsing import ParsedFile, ParseFailure, parse
@@ -94,10 +95,11 @@ def _check_file(
     # learn the file's imports, then to run the rules. An import can be
     # written below the code that uses it (inside a function, for example),
     # so the imports must all be known before the first rule runs.
-    nodes = list(ast.walk(parsed_file.tree))
+    nodes, values = analyse(parsed_file.tree)
     context = FileContext(
         path=parsed_file.source_file.relative_path,
         imports=collect_imports(nodes),
+        values=values,
     )
     findings: list[Finding] = []
     for node in nodes:

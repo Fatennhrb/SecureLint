@@ -2,6 +2,14 @@
 
 What changed in each version of SecureLint, newest first.
 
+## Unreleased
+
+- Rules look through a variable to the value it was given, inside one
+  function. A query built on one line and run on the next is now reported,
+  and a fixed value kept in a variable is no longer reported. This is done
+  only when the variable is assigned exactly once.
+- Corpus: 51 dangerous lines reported (was 50), 12 missed (was 13).
+
 ## 0.1.0 (2026-11-12)
 
 The first release: a working scanner for Python source code.

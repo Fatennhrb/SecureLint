@@ -14,7 +14,7 @@ name, so every rule compares against a single spelling.
 
 import ast
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +27,21 @@ class FileContext:
     imports: Mapping[str, str]
     """Each imported name in the file, mapped to what it really refers to,
     e.g. ``{"sp": "subprocess", "system": "os.system"}``."""
+
+    values: Mapping[ast.Name, ast.expr] = field(default_factory=dict)
+    """For each place a variable is read, the expression it was given, when
+    there is exactly one (see ``securelint.dataflow``)."""
+
+    def value_of(self, node: ast.expr) -> ast.expr | None:
+        """Return the expression a variable was given, if that is certain.
+
+        For ``query`` in ``cursor.execute(query)`` this is the right-hand
+        side of ``query = ...``. Returns ``None`` for anything that is not
+        a variable, and for a variable with no single known value.
+        """
+        if isinstance(node, ast.Name):
+            return self.values.get(node)
+        return None
 
     def qualified_name(self, node: ast.expr) -> str | None:
         """Return the real, full name of what an expression refers to.

@@ -69,7 +69,7 @@ class ShellCommandInjection(Rule):
             return []
 
         command = _command_argument(node)
-        if command is None or is_fixed(command):
+        if command is None or is_fixed(command, context):
             return []
         return [
             Finding(

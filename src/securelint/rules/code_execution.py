@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
+from securelint.rules._helpers import is_fixed
 
 _DANGEROUS_BUILTINS = frozenset({"eval", "exec", "builtins.eval", "builtins.exec"})
 
@@ -40,7 +41,7 @@ class DynamicCodeExecution(Rule):
             return []
         # The code to run is always the first argument. A literal there is
         # fixed when the program is written, so it cannot be an attack.
-        if not node.args or isinstance(node.args[0], ast.Constant):
+        if not node.args or is_fixed(node.args[0], context):
             return []
         return [
             Finding(

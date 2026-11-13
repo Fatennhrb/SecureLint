@@ -87,3 +87,8 @@ def quoted(host):
 
 def other_library(app, command):
     app.run(command, shell=True)
+
+
+def fixed_command_in_a_variable():
+    command = "ls -l"
+    os.system(command)

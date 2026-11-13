@@ -48,6 +48,11 @@ securelint scan src/ --format html > report.html
 to read: a summary, then every finding with its rule, severity, confidence,
 path, line, column and message, and the files that could not be scanned.
 
+Each finding in the JSON report has a `fingerprint`: a short code built from
+the rule, the file path and the text of the reported line, not its line number.
+It stays the same when code is added or removed elsewhere in the file, and
+changes when the reported line itself is edited.
+
 `--format html` writes one page to open in a browser: a summary, then the
 problems grouped by file. The page is a single file with its style inside. It
 contains no script and loads nothing from the network, and every file name and

@@ -98,6 +98,7 @@ def test_json_report_holds_every_field_of_a_finding() -> None:
             "line": 12,
             "column": 5,
             "message": "Example problem.",
+            "fingerprint": "",
         }
     ]
 

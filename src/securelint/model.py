@@ -62,6 +62,11 @@ class Finding:
     Python's ``ast`` module counts columns from 0, so rules add 1.
     """
 
+    fingerprint: str = ""
+    """A short code that identifies this finding even after the lines around
+    it have moved (see ``securelint.fingerprint``). Rules leave it empty;
+    the engine fills it in once the whole file has been checked."""
+
     def __post_init__(self) -> None:
         # A broken finding should fail where it is created, not later as a
         # confusing line in a report.

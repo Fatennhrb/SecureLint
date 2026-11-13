@@ -14,6 +14,7 @@ from typing import ClassVar
 from securelint.context import FileContext, collect_imports
 from securelint.dataflow import analyse
 from securelint.discovery import discover
+from securelint.fingerprint import add_fingerprints
 from securelint.model import Finding
 from securelint.parsing import ParsedFile, ParseFailure, parse
 from securelint.suppressions import Silenced, apply_comments
@@ -93,6 +94,17 @@ def scan(
             source_file.relative_path,
             running,
         )
+        if kept or hidden:
+            # Kept and silenced findings are numbered together, so silencing
+            # one of two identical lines does not change the other's identity.
+            marked = add_fingerprints(
+                [*kept, *(item.finding for item in hidden)], result.source
+            )
+            kept = marked[: len(kept)]
+            hidden = [
+                Silenced(finding, item.reason)
+                for finding, item in zip(marked[len(kept) :], hidden, strict=True)
+            ]
         findings.extend(kept)
         silenced.extend(hidden)
 

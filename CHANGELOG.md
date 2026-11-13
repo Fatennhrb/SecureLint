@@ -11,6 +11,8 @@ What changed in each version of SecureLint, newest first.
   `# securelint: ignore[SL102] reason`. Silenced findings are counted and
   listed in the reports, and a comment that silences nothing is reported as
   `SL001`.
+- Each finding has a `fingerprint` in the JSON report: an identity that
+  does not change when lines are added or removed elsewhere in the file.
 
 ## 0.2.0 (2026-11-13)
 

@@ -83,6 +83,7 @@ def _finding_fields(finding: Finding) -> dict[str, Any]:
         "line": finding.line,
         "column": finding.column,
         "message": finding.message,
+        "fingerprint": finding.fingerprint,
     }
 
 

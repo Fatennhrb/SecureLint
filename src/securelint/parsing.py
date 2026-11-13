@@ -21,6 +21,9 @@ class ParsedFile:
     source_file: SourceFile
     tree: ast.Module
 
+    source: bytes
+    """The file's content as read from disk, kept for reading its comments."""
+
 
 @dataclass(frozen=True, slots=True)
 class ParseFailure:
@@ -67,4 +70,4 @@ def parse(source_file: SourceFile) -> ParsedFile | ParseFailure:
         # Extremely deep nesting, e.g. thousands of chained operators.
         return ParseFailure(relative_path, "code is nested too deeply to parse")
 
-    return ParsedFile(source_file=source_file, tree=tree)
+    return ParsedFile(source_file=source_file, tree=tree, source=data)

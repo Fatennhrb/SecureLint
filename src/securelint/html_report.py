@@ -17,6 +17,7 @@ from securelint.engine import ScanResult
 from securelint.model import Finding, Severity
 from securelint.parsing import ParseFailure
 from securelint.report import summary_line
+from securelint.suppressions import Silenced
 
 # Forbids scripts, images, fonts and network requests; only the style
 # written in the page itself is allowed. Even if some text slipped through
@@ -120,6 +121,7 @@ def format_html(result: ScanResult) -> str:
         *_status(result),
         *_cards(result),
         *_findings(result.findings),
+        *_silenced(result.silenced),
         *_failures(result.failures),
         "<footer>The exact place of each problem is given as line and column, "
         "both counted from 1.</footer>",
@@ -208,6 +210,23 @@ def _finding(finding: Finding) -> str:
         f"<p>{_text(finding.message)}</p>"
         "</li>"
     )
+
+
+def _silenced(silenced: tuple[Silenced, ...]) -> list[str]:
+    """List the findings hidden by a comment, each with the reason given."""
+    if not silenced:
+        return []
+    lines = ["<h2>Silenced by a comment</h2>", '<section class="file">', "<ul>"]
+    for item in silenced:
+        finding = item.finding
+        place = f"{finding.path}:{finding.line}"
+        reason = item.reason or "No reason given."
+        lines.append(
+            f'<li class="failure"><span class="rule">{_text(place)} '
+            f"{_text(finding.rule_id)}</span> {_text(reason)}</li>"
+        )
+    lines += ["</ul>", "</section>"]
+    return lines
 
 
 def _failures(failures: tuple[ParseFailure, ...]) -> list[str]:

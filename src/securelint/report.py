@@ -6,7 +6,7 @@ from typing import Any
 
 from securelint import __version__
 from securelint.engine import ScanResult
-from securelint.model import Severity
+from securelint.model import Finding, Severity
 
 JSON_FORMAT_VERSION = 1
 """Raised when the JSON report changes in a way that could break a program
@@ -52,18 +52,13 @@ def format_json(result: ScanResult) -> str:
                 for severity in sorted(Severity, reverse=True)
             },
             "failures": len(result.failures),
+            "silenced": len(result.silenced),
         },
-        "findings": [
-            {
-                "rule_id": finding.rule_id,
-                "severity": finding.severity.name.lower(),
-                "confidence": finding.confidence.name.lower(),
-                "path": finding.path,
-                "line": finding.line,
-                "column": finding.column,
-                "message": finding.message,
-            }
-            for finding in result.findings
+        "findings": [_finding_fields(finding) for finding in result.findings],
+        # Findings hidden by a comment in the code, with the reason given.
+        "silenced": [
+            {**_finding_fields(item.finding), "reason": item.reason}
+            for item in result.silenced
         ],
         "failures": [
             {
@@ -79,8 +74,31 @@ def format_json(result: ScanResult) -> str:
     return json.dumps(document, indent=2)
 
 
+def _finding_fields(finding: Finding) -> dict[str, Any]:
+    return {
+        "rule_id": finding.rule_id,
+        "severity": finding.severity.name.lower(),
+        "confidence": finding.confidence.name.lower(),
+        "path": finding.path,
+        "line": finding.line,
+        "column": finding.column,
+        "message": finding.message,
+    }
+
+
 def summary_line(result: ScanResult) -> str:
-    """Return the one-sentence result, e.g. ``2 problems found in 1 file (2 high).``"""
+    """Return the result in words, e.g. ``2 problems found in 1 file (2 high).``
+
+    When comments in the code silenced some findings, their number follows:
+    ``No problems found in 3 files. Silenced by a comment: 2.``
+    """
+    summary = _findings_summary(result)
+    if result.silenced:
+        summary += f" Silenced by a comment: {len(result.silenced)}."
+    return summary
+
+
+def _findings_summary(result: ScanResult) -> str:
     files = _count(result.files_scanned, "file")
     if not result.findings:
         return f"No problems found in {files}."

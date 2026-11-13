@@ -86,10 +86,32 @@ settings exclude it: `securelint scan tests/fixtures` scans that folder.
 A mistake in the settings stops the scan with exit code 2: an unknown setting,
 an unknown rule or a wrong type is an error, never skipped silently.
 
+## Silencing one finding
+
+When a reported line has been checked and is fine, say so on that line, naming
+the rule:
+
+```python
+os.system(command)  # securelint: ignore[SL102] command is our own setting
+```
+
+- The rule must be named. Several can be given: `ignore[SL101, SL102]`. There
+  is no way to silence everything on a line.
+- The text after the brackets is the reason. It is optional, and shown in the
+  reports.
+- The comment goes on the line where the finding is reported. For a call
+  written on several lines, that is its first line.
+- A silenced finding is not thrown away: the summary counts it, and the JSON
+  and HTML reports list it with its reason.
+- A comment that silences nothing is reported as `SL001`: the rule reports
+  nothing on that line any more, the rule does not exist, or the comment is
+  not written correctly.
+
 ## Rules
 
 | ID | Severity | What it reports |
 |----|----------|-----------------|
+| SL001 | Low | A `securelint:` comment that silences nothing. |
 | SL101 | High | `eval()` or `exec()` called with a value built at run time. A fixed string such as `eval("2 + 2")` is not reported. |
 | SL102 | High | A shell command built at run time: `os.system()`, `os.popen()`, `subprocess.getoutput()`, or a `subprocess` call with `shell=True`. A fixed command, or a list of arguments without `shell=True`, is not reported. |
 | SL103 | High | Data loaded with a format that can run code: `pickle`, `dill` or `marshal` loading, and `yaml.load()` without a safe loader. `yaml.safe_load()` and JSON are not reported. |

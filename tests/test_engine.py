@@ -27,6 +27,7 @@ def make_finding(rule_id: str, node: ast.expr | ast.stmt, path: str) -> Finding:
 class EvalRule(Rule):
     """Reports every call to a function named ``eval``."""
 
+    rule_id = "T001"
     node_types = (ast.Call,)
 
     def __init__(self) -> None:
@@ -42,6 +43,7 @@ class EvalRule(Rule):
 class AssertRule(Rule):
     """Reports every ``assert`` statement."""
 
+    rule_id = "T002"
     node_types = (ast.Assert,)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
@@ -52,6 +54,7 @@ class AssertRule(Rule):
 class ImportSpy(Rule):
     """Records the imports the engine reports for each file it checks."""
 
+    rule_id = "T003"
     node_types = (ast.Module,)
 
     def __init__(self) -> None:

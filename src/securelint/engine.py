@@ -16,6 +16,7 @@ from securelint.dataflow import analyse
 from securelint.discovery import discover
 from securelint.model import Finding
 from securelint.parsing import ParsedFile, ParseFailure, parse
+from securelint.suppressions import Silenced, apply_comments
 
 
 class Rule(ABC):
@@ -54,6 +55,10 @@ class ScanResult:
     files_scanned: int
     """Number of files that were parsed and checked."""
 
+    silenced: tuple[Silenced, ...] = ()
+    """Findings hidden by a comment in the code. They are kept apart, not
+    thrown away, so every report can show what was hidden and why."""
+
 
 def scan(
     target: Path, rules: Sequence[Rule], exclude: Collection[Path] = ()
@@ -70,7 +75,10 @@ def scan(
         for node_type in rule.node_types:
             rules_by_node_type.setdefault(node_type, []).append(rule)
 
+    running = {rule.rule_id for rule in rules}
+
     findings: list[Finding] = []
+    silenced: list[Silenced] = []
     failures: list[ParseFailure] = []
     files_scanned = 0
     for source_file in discover(target, exclude):
@@ -79,13 +87,22 @@ def scan(
             failures.append(result)
             continue
         files_scanned += 1
-        findings.extend(_check_file(result, rules_by_node_type))
+        kept, hidden = apply_comments(
+            _check_file(result, rules_by_node_type),
+            result.source,
+            source_file.relative_path,
+            running,
+        )
+        findings.extend(kept)
+        silenced.extend(hidden)
 
     findings.sort(key=_sort_key)
+    silenced.sort(key=lambda item: _sort_key(item.finding))
     return ScanResult(
         findings=tuple(findings),
         failures=tuple(failures),
         files_scanned=files_scanned,
+        silenced=tuple(silenced),
     )
 
 

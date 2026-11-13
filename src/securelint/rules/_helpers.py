@@ -2,12 +2,7 @@
 
 import ast
 
-from securelint.context import FileContext
-
-MAX_HOPS = 10
-"""How many variables a rule follows one after the other (``a = b``, then
-``b = c``...). The limit stops two variables that point at each other from
-being followed for ever."""
+from securelint.context import MAX_HOPS, FileContext
 
 
 def is_fixed(node: ast.expr, context: FileContext, hops: int = 0) -> bool:

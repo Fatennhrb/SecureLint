@@ -22,12 +22,12 @@ test fails until `missed` is changed to `expect`, or `false-alarm` is removed.
 
 | Rule | Detected | Missed | False alarms |
 |------|---------:|-------:|-------------:|
-| SL101 | 7 | 1 | 1 |
-| SL102 | 10 | 3 | 2 |
-| SL103 | 12 | 2 | 1 |
+| SL101 | 8 | 0 | 1 |
+| SL102 | 11 | 2 | 2 |
+| SL103 | 13 | 1 | 1 |
 | SL104 | 11 | 5 | 2 |
 | SL105 | 11 | 1 | 2 |
-| **Total** | **51** | **12** | **8** |
+| **Total** | **54** | **9** | **8** |
 
 The same numbers are in `TOTALS` in the test, which fails if they stop
 being true.

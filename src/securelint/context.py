@@ -16,6 +16,11 @@ import ast
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
+MAX_HOPS = 10
+"""How many variables are followed one after the other (``a = b``, then
+``b = c``...). The limit stops two variables that point at each other from
+being followed for ever."""
+
 
 @dataclass(frozen=True, slots=True)
 class FileContext:
@@ -43,12 +48,15 @@ class FileContext:
             return self.values.get(node)
         return None
 
-    def qualified_name(self, node: ast.expr) -> str | None:
+    def qualified_name(self, node: ast.expr, hops: int = 0) -> str | None:
         """Return the real, full name of what an expression refers to.
 
         With ``import subprocess as sp``, the expression ``sp.run`` gives
         ``"subprocess.run"``. A name the file does not import is returned
         as written, which is right for built-ins such as ``eval``.
+
+        A function kept in a variable is followed too: after
+        ``run = os.system``, the expression ``run`` gives ``"os.system"``.
 
         Returns ``None`` when the expression is not a plain chain of names,
         for example ``get_module().run``.
@@ -57,6 +65,18 @@ class FileContext:
         if name is None:
             return None
         first, dot, rest = name.partition(".")
+
+        # The chain starts with a variable given its value once: continue
+        # from that value. "sp = subprocess" then "sp.run" is subprocess.run.
+        start = node
+        while isinstance(start, ast.Attribute):
+            start = start.value
+        value = self.value_of(start)
+        if value is not None and hops < MAX_HOPS:
+            real_start = self.qualified_name(value, hops + 1)
+            if real_start is not None:
+                return f"{real_start}{dot}{rest}"
+
         target = self.imports.get(first)
         if target is None:
             return name

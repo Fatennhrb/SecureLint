@@ -50,7 +50,7 @@ def imported_run(command):
 
 def stored_in_a_variable(command):
     launch = os.system
-    launch(command)  # missed: SL102
+    launch(command)  # expect: SL102
 
 
 def options_in_a_dictionary(command):

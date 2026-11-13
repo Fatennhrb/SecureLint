@@ -8,7 +8,9 @@ What changed in each version of SecureLint, newest first.
   function. A query built on one line and run on the next is now reported,
   and a fixed value kept in a variable is no longer reported. This is done
   only when the variable is assigned exactly once.
-- Corpus: 51 dangerous lines reported (was 50), 12 missed (was 13).
+- A function kept in a variable is followed: after `run = os.system`,
+  `run(command)` is checked as `os.system(command)`.
+- Corpus: 54 dangerous lines reported (was 50), 9 missed (was 13).
 
 ## 0.1.0 (2026-11-12)
 

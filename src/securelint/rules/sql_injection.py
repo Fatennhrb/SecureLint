@@ -4,10 +4,10 @@ import ast
 import re
 from collections.abc import Iterable
 
-from securelint.context import FileContext
+from securelint.context import MAX_HOPS, FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
-from securelint.rules._helpers import MAX_HOPS, is_fixed
+from securelint.rules._helpers import is_fixed
 
 # Methods that send a query to a database. A cursor is an ordinary object,
 # so there is no import to follow: the method is recognised by its name,
@@ -54,9 +54,11 @@ class SqlInjection(Rule):
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         if not isinstance(node, ast.Call):
             return []
-        if not isinstance(node.func, ast.Attribute):
+        # execute = cursor.execute on one line, execute(...) on another.
+        function = context.value_of(node.func) or node.func
+        if not isinstance(function, ast.Attribute):
             return []
-        method = node.func.attr
+        method = function.attr
         if method not in _QUERY_METHODS:
             return []
         query = _query_argument(node, context)

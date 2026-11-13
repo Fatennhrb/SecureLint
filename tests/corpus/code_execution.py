@@ -32,7 +32,7 @@ def compiled_first(source):
 
 def stored_in_a_variable(data):
     run = eval
-    return run(data)  # missed: SL101
+    return run(data)  # expect: SL101
 
 
 # ---- Safe code: nothing below is dangerous. ----

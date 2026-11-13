@@ -53,7 +53,7 @@ def imported_yaml_load(document):
 
 def stored_in_a_variable(blob):
     restore = pickle.loads
-    return restore(blob)  # missed: SL103
+    return restore(blob)  # expect: SL103
 
 
 def shared_table(download_path):

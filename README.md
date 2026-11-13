@@ -85,6 +85,9 @@ command = "ls -l"
 os.system(command)  # not reported: the command is fixed
 ```
 
+A function kept in a variable is followed the same way: after
+`run = os.system`, the call `run(command)` is checked as `os.system(command)`.
+
 This is done only when the variable is assigned exactly once. A variable
 assigned twice, changed with `+=`, or received as a parameter has no single
 value, and is treated as before.
@@ -97,12 +100,13 @@ including the ones SecureLint does not find yet.
 
 | | Count |
 |---|---:|
-| Dangerous lines reported | 51 |
-| Dangerous lines missed | 12 |
+| Dangerous lines reported | 54 |
+| Dangerous lines missed | 9 |
 | Safe lines reported by mistake | 8 |
 
-The misses are cases the scanner cannot follow yet, such as a dangerous
-function kept under another name (`run = os.system`, then `run(command)`).
+The misses are cases the scanner cannot follow yet, such as a shell started
+by hand (`subprocess.run(["sh", "-c", command])`) or a password inside a
+database address.
 Version 0.1.0 reported 50 and missed 13. These examples were written for this
 project, so the
 numbers show what works and what does not today, not results on real projects.

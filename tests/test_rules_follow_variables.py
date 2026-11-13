@@ -176,3 +176,70 @@ def test_a_long_chain_of_variables_stops_being_followed(tmp_path: Path) -> None:
     # The long chain is reported (the rule gave up, so it cannot say "fixed");
     # the short one is known to be fixed.
     assert reported(tmp_path, code) == [(23, "SL102")]
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        # A dangerous function kept under another name.
+        ("run = eval\nrun(data)\n", [(2, "SL101")]),
+        (
+            "def f(command):\n    launch = os.system\n    launch(command)\n",
+            [(3, "SL102")],
+        ),
+        (
+            "def f(blob):\n    restore = pickle.loads\n    return restore(blob)\n",
+            [(3, "SL103")],
+        ),
+        # A module kept under another name.
+        (
+            "def f(command):\n    sp = subprocess\n    sp.run(command, shell=True)\n",
+            [(3, "SL102")],
+        ),
+        # Through two variables.
+        (
+            "def f(command):\n    a = os\n    b = a.system\n    b(command)\n",
+            [(4, "SL102")],
+        ),
+        # A renamed import, then a variable.
+        (
+            "import os as o\n\ndef f(command):\n    run = o.system\n    run(command)\n",
+            [(5, "SL102")],
+        ),
+        # A method kept in a variable.
+        (
+            "def f(cursor, name):\n"
+            "    execute = cursor.execute\n"
+            "    execute(f\"SELECT * FROM users WHERE name = '{name}'\")\n",
+            [(3, "SL105")],
+        ),
+    ],
+)
+def test_reports_a_dangerous_function_kept_in_a_variable(
+    tmp_path: Path, code: str, expected: list[tuple[int, str]]
+) -> None:
+    assert reported(tmp_path, code) == expected
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # A harmless function kept in a variable.
+        "def f(data):\n    run = print\n    run(data)\n",
+        "def f(text):\n    load = json.loads\n    return load(text)\n",
+        # A project function that only shares a name.
+        "def f(command):\n    system = safe_wrapper\n    system(command)\n",
+        # A safe loader kept in a variable.
+        (
+            "def f(document):\n"
+            "    loader = yaml.SafeLoader\n"
+            "    return yaml.load(document, Loader=loader)\n"
+        ),
+        # Variables that point at each other.
+        "def f(data):\n    a = b\n    b = a\n    a(data)\n",
+    ],
+)
+def test_does_not_report_a_harmless_function_kept_in_a_variable(
+    tmp_path: Path, code: str
+) -> None:
+    assert reported(tmp_path, code) == []

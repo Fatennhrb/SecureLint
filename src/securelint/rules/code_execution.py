@@ -32,6 +32,7 @@ class DynamicCodeExecution(Rule):
     """
 
     rule_id = "SL101"
+    title = "Code built at run time is run with eval() or exec()"
     node_types = (ast.Call,)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:

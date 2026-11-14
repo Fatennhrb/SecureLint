@@ -30,6 +30,10 @@ class Rule(ABC):
     rule_id: ClassVar[str]
     """The rule's short name, e.g. ``"SL101"``, used in reports and settings."""
 
+    title: ClassVar[str] = ""
+    """A few words saying what the rule reports, for reports that list the
+    rules (SARIF). Empty for a rule that has none."""
+
     node_types: ClassVar[tuple[type[ast.AST], ...]]
     """The node classes this rule inspects, e.g. ``(ast.Call,)``."""
 
@@ -68,6 +72,13 @@ class ScanResult:
     warnings: tuple[Finding, ...] = ()
     """Findings that the project's policy reports without blocking (see
     ``securelint.policy``). A scan itself leaves this empty."""
+
+    base: str = ""
+    """Where the scanned directory is, counted from the top of the project,
+    e.g. ``"src"``; empty when it is the top itself, or when the top is not
+    known. Paths in findings are relative to the scanned directory, so a
+    report that needs paths from the top of the project (SARIF) puts this
+    in front of them."""
 
 
 def scan(
@@ -133,7 +144,21 @@ def scan(
         failures=tuple(failures),
         files_scanned=files_scanned,
         silenced=tuple(silenced),
+        base=_base(target, root),
     )
+
+
+def _base(target: Path, root: Path | None) -> str:
+    """Return the scanned directory's path from the top of the project."""
+    if root is None:
+        return ""
+    directory = target.resolve()
+    if not directory.is_dir():
+        directory = directory.parent
+    if not directory.is_relative_to(root):
+        return ""
+    base = directory.relative_to(root).as_posix()
+    return "" if base == "." else base
 
 
 def _check_file(

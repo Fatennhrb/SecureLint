@@ -60,6 +60,7 @@ class HardcodedSecret(Rule):
     """
 
     rule_id = "SL104"
+    title = "Password or key written in the code"
     node_types = (ast.Assign, ast.AnnAssign, ast.keyword, ast.Dict)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:

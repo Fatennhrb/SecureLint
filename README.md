@@ -43,6 +43,7 @@ securelint scan src/         # scan one directory
 securelint scan app.py       # scan one file
 securelint scan src/ --format json > report.json
 securelint scan src/ --format html > report.html
+securelint scan --format sarif > securelint.sarif
 ```
 
 `--format json` writes the same result as a JSON document for other programs
@@ -58,6 +59,20 @@ changes when the reported line itself is edited.
 problems grouped by file. The page is a single file with its style inside. It
 contains no script and loads nothing from the network, and every file name and
 message is escaped before it is written into the page.
+
+`--format sarif` writes SARIF 2.1.0, the standard format GitHub reads for
+security tools. Uploaded to GitHub, the results appear in the repository's
+Security tab and next to the changed lines of a pull request. Every finding is
+written, with a level that follows the policy:
+
+| SARIF level | Meaning |
+|-------------|---------|
+| `error` | The finding blocks. |
+| `warning` | The policy reports it without blocking, or a comment silenced it (it is then also marked as suppressed). |
+| `note` | The finding is listed in the baseline file (marked `"baselineState": "unchanged"`). |
+
+Paths are written from the top of the project, whatever folder was scanned,
+and each result carries its fingerprint so GitHub can follow it between scans.
 
 The exit code tells a script or a CI job what happened:
 

@@ -56,6 +56,7 @@ class ShellCommandInjection(Rule):
     """
 
     rule_id = "SL102"
+    title = "Shell command built at run time"
     node_types = (ast.Call,)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:

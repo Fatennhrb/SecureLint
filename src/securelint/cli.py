@@ -22,9 +22,15 @@ from securelint.html_report import format_html
 from securelint.policy import apply_policy
 from securelint.report import format_json, format_text
 from securelint.rules import ALL_RULES
+from securelint.sarif_report import format_sarif
 
 # The report formats `scan --format` accepts, and the function behind each.
-FORMATS = {"text": format_text, "json": format_json, "html": format_html}
+FORMATS = {
+    "text": format_text,
+    "json": format_json,
+    "html": format_html,
+    "sarif": format_sarif,
+}
 
 # Exit codes are how a CI job reads the result, so they are part of the
 # tool's public behaviour and must stay stable.

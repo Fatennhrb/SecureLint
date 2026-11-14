@@ -2,6 +2,12 @@
 
 What changed in each version of SecureLint, newest first.
 
+## Unreleased
+
+- `--format sarif` writes the result in SARIF 2.1.0, the format GitHub reads
+  for security tools, with paths from the top of the project and each
+  finding's fingerprint.
+
 ## 0.3.0 (2026-11-14)
 
 Policy and configuration: what a team needs to use the scanner every day.

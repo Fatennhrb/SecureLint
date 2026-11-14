@@ -48,6 +48,7 @@ class UnsafeDeserialization(Rule):
     """
 
     rule_id = "SL103"
+    title = "Data loaded with a format that can run code"
     node_types = (ast.Call,)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:

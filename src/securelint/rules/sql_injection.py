@@ -50,6 +50,7 @@ class SqlInjection(Rule):
     """
 
     rule_id = "SL105"
+    title = "SQL query built by putting values into its text"
     node_types = (ast.Call,)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:

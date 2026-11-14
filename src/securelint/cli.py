@@ -19,6 +19,7 @@ from securelint.baseline import (
 from securelint.config import Config, ConfigError, load_config
 from securelint.engine import Rule, ScanResult, scan
 from securelint.html_report import format_html
+from securelint.policy import apply_policy
 from securelint.report import format_json, format_text
 from securelint.rules import ALL_RULES
 
@@ -28,10 +29,10 @@ FORMATS = {"text": format_text, "json": format_json, "html": format_html}
 # Exit codes are how a CI job reads the result, so they are part of the
 # tool's public behaviour and must stay stable.
 EXIT_CLEAN = 0
-"""The scan finished and found no problems."""
+"""The scan finished and nothing blocks (there may be warnings)."""
 
 EXIT_FINDINGS = 1
-"""The scan finished and found at least one problem."""
+"""The scan finished and found at least one problem that blocks."""
 
 EXIT_ERROR = 2
 """The scan could not be completed, so its result cannot be trusted.
@@ -149,6 +150,9 @@ def _run_scan(target: Path, report_format: str, *, use_baseline: bool) -> int:
         return EXIT_ERROR
     if known is not None:
         result = split_known(result, known)
+    # Last of all: the policy only sorts what is left into "blocks" and
+    # "warning". Known problems are neither.
+    result = apply_policy(result, project.config.policy)
 
     # The report goes to standard output; everything about the scan itself
     # goes to standard error, so `securelint scan > report.txt` stays clean.

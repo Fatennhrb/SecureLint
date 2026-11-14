@@ -62,8 +62,8 @@ The exit code tells a script or a CI job what happened:
 
 | Code | Meaning |
 |------|---------|
-| 0 | The scan finished and found no problems. |
-| 1 | The scan finished and found at least one problem. |
+| 0 | The scan finished and nothing blocks. There may be warnings, if the project has a policy. |
+| 1 | The scan finished and found at least one problem that blocks. |
 | 2 | The scan could not be completed: wrong command line, a path that does not exist, or a file that could not be read or parsed. |
 
 ## Settings
@@ -80,6 +80,7 @@ ignore = ["SL104"]
 |---------|---------|
 | `exclude` | Files and directories to leave out. Paths are relative to the `pyproject.toml`. |
 | `ignore` | Rules to turn off, by id. |
+| `policy` | Which findings block; see [Deciding what blocks](#deciding-what-blocks). |
 
 The file is looked for in the scanned directory, then in the directories above
 it, up to the top of the Git repository. When settings are used, SecureLint
@@ -90,6 +91,33 @@ settings exclude it: `securelint scan tests/fixtures` scans that folder.
 
 A mistake in the settings stops the scan with exit code 2: an unknown setting,
 an unknown rule or a wrong type is an error, never skipped silently.
+
+## Deciding what blocks
+
+Without a policy, every finding makes `securelint scan` fail (exit code 1). A
+policy says which findings must be fixed and which are only warnings:
+
+```toml
+[tool.securelint.policy]
+block-severity = "high"
+block-confidence = "medium"
+```
+
+| Setting | Values | Default |
+|---------|--------|---------|
+| `block-severity` | `"low"`, `"medium"`, `"high"`, `"critical"` | `"low"` |
+| `block-confidence` | `"low"`, `"medium"`, `"high"` | `"low"` |
+
+A finding blocks when it is at least that severe **and** the rule is at least
+that sure. With the example above, a high-severity finding of medium confidence
+blocks, while a medium-severity one is a warning.
+
+Warnings are still reported: marked `(warning)` in the text report, and listed
+apart in the JSON and HTML reports. They do not change the exit code, so a scan
+with only warnings exits with 0.
+
+The defaults are the lowest levels, so a project that writes no policy keeps
+the strict behaviour.
 
 ## Silencing one finding
 

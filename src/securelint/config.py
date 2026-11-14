@@ -14,12 +14,16 @@ otherwise turn a setting off without anyone noticing.
 
 import tomllib
 from collections.abc import Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from securelint.model import Confidence, Severity
+from securelint.policy import Policy
+
 _FILE_NAME = "pyproject.toml"
-_KNOWN_SETTINGS = frozenset({"exclude", "ignore"})
+_KNOWN_SETTINGS = frozenset({"exclude", "ignore", "policy"})
+_KNOWN_POLICY_SETTINGS = frozenset({"block-severity", "block-confidence"})
 
 
 class ConfigError(Exception):
@@ -38,6 +42,9 @@ class Config:
 
     ignore: frozenset[str] = frozenset()
     """Ids of the rules that are turned off."""
+
+    policy: Policy = field(default_factory=Policy)
+    """Which findings block and which are warnings."""
 
 
 def load_config(target: Path, known_rule_ids: Collection[str]) -> Config:
@@ -82,7 +89,56 @@ def load_config(target: Path, known_rule_ids: Collection[str]) -> Config:
         # same thing wherever the scan is started from.
         exclude.append((path.parent / entry).resolve())
 
-    return Config(source=path, exclude=tuple(exclude), ignore=frozenset(ignore))
+    return Config(
+        source=path,
+        exclude=tuple(exclude),
+        ignore=frozenset(ignore),
+        policy=_policy(table, path),
+    )
+
+
+def _policy(table: dict[str, Any], path: Path) -> Policy:
+    """Read the ``[tool.securelint.policy]`` table; the defaults without one."""
+    settings = table.get("policy", {})
+    if not isinstance(settings, dict):
+        raise ConfigError(f"{path}: [tool.securelint.policy] must be a table")
+    unknown = sorted(set(settings) - _KNOWN_POLICY_SETTINGS)
+    if unknown:
+        raise ConfigError(
+            f"{path}: unknown setting {unknown[0]!r} in [tool.securelint.policy] "
+            f"(known settings: {', '.join(sorted(_KNOWN_POLICY_SETTINGS))})"
+        )
+
+    policy = Policy()
+    severity = _level_name(
+        settings, "block-severity", [level.name for level in Severity], path
+    )
+    if severity is not None:
+        policy = replace(policy, block_severity=Severity[severity])
+    confidence = _level_name(
+        settings, "block-confidence", [level.name for level in Confidence], path
+    )
+    if confidence is not None:
+        policy = replace(policy, block_confidence=Confidence[confidence])
+    return policy
+
+
+def _level_name(
+    settings: dict[str, Any], name: str, levels: list[str], path: Path
+) -> str | None:
+    """Read a setting that must name a level, such as ``"high"``.
+
+    Returns the level's name in capitals, or ``None`` when the setting is
+    not written.
+    """
+    if name not in settings:
+        return None
+    value = settings[name]
+    names = [level.lower() for level in levels]
+    if not isinstance(value, str) or value not in names:
+        choices = ", ".join(f'"{level}"' for level in names)
+        raise ConfigError(f"{path}: {name} must be one of {choices}")
+    return value.upper()
 
 
 def _find_settings_file(target: Path) -> Path | None:

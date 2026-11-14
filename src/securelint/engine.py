@@ -65,6 +65,10 @@ class ScanResult:
     already there when the project accepted them (see ``securelint.baseline``).
     A scan itself leaves this empty."""
 
+    warnings: tuple[Finding, ...] = ()
+    """Findings that the project's policy reports without blocking (see
+    ``securelint.policy``). A scan itself leaves this empty."""
+
 
 def scan(
     target: Path,

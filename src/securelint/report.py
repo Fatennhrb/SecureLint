@@ -17,13 +17,19 @@ def format_text(result: ScanResult) -> str:
     """Return one line per finding, then a one-line summary.
 
     Each finding starts with ``path:line:column``, a form that editors and
-    terminals recognise and turn into a link to the exact place.
+    terminals recognise and turn into a link to the exact place. A finding
+    that the policy does not block is marked ``(warning)``.
     """
+    # Blocking findings and warnings are listed together in file order, so
+    # everything about one place in the code is read in one go.
+    marked = [(finding, "") for finding in result.findings]
+    marked += [(finding, "(warning) ") for finding in result.warnings]
+    marked.sort(key=lambda item: _position(item[0]))
     lines = [
         f"{finding.path}:{finding.line}:{finding.column}"
         f"  {finding.severity.name.lower():<8}"
-        f"  {finding.rule_id}  {finding.message}"
-        for finding in result.findings
+        f"  {finding.rule_id}  {mark}{finding.message}"
+        for finding, mark in marked
     ]
     if lines:
         lines.append("")
@@ -52,10 +58,14 @@ def format_json(result: ScanResult) -> str:
                 for severity in sorted(Severity, reverse=True)
             },
             "failures": len(result.failures),
+            "warnings": len(result.warnings),
             "silenced": len(result.silenced),
             "known": len(result.known),
         },
+        # The findings that block. Without a policy, that is all of them.
         "findings": [_finding_fields(finding) for finding in result.findings],
+        # Findings that the project's policy reports without blocking.
+        "warnings": [_finding_fields(finding) for finding in result.warnings],
         # Findings hidden by a comment in the code, with the reason given.
         "silenced": [
             {**_finding_fields(item.finding), "reason": item.reason}
@@ -95,9 +105,12 @@ def summary_line(result: ScanResult) -> str:
 
     When comments in the code silenced some findings, their number follows:
     ``No problems found in 3 files. Silenced by a comment: 2.`` The number
-    of findings listed in the baseline file is given the same way.
+    of findings listed in the baseline file is given the same way, and so
+    is the number of warnings when the project has a policy.
     """
     summary = _findings_summary(result)
+    if result.warnings:
+        summary += f" Warnings: {len(result.warnings)}."
     if result.silenced:
         summary += f" Silenced by a comment: {len(result.silenced)}."
     if result.known:
@@ -108,7 +121,9 @@ def summary_line(result: ScanResult) -> str:
 def _findings_summary(result: ScanResult) -> str:
     files = _count(result.files_scanned, "file")
     if not result.findings:
-        return f"No problems found in {files}."
+        # "No problems" would be untrue next to a list of warnings.
+        nothing = "No blocking problems" if result.warnings else "No problems"
+        return f"{nothing} found in {files}."
 
     counts = Counter(finding.severity for finding in result.findings)
     # Most serious first: "1 critical, 2 high", never "2 high, 1 critical".
@@ -119,6 +134,10 @@ def _findings_summary(result: ScanResult) -> str:
     )
     problems = _count(len(result.findings), "problem")
     return f"{problems} found in {files} ({by_severity})."
+
+
+def _position(finding: Finding) -> tuple[str, int, int, str]:
+    return (finding.path, finding.line, finding.column, finding.rule_id)
 
 
 def _count(number: int, noun: str) -> str:

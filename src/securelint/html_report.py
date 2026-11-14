@@ -120,7 +120,8 @@ def format_html(result: ScanResult) -> str:
         "</header>",
         *_status(result),
         *_cards(result),
-        *_findings(result.findings),
+        *_findings(result.findings, "Problems"),
+        *_findings(result.warnings, "Warnings"),
         *_silenced(result.silenced),
         *_known(result.known),
         *_failures(result.failures),
@@ -146,7 +147,7 @@ def _text(value: object) -> str:
 
 
 def _status(result: ScanResult) -> list[str]:
-    kind = "bad" if result.findings else "ok"
+    kind = "bad" if result.findings else "warn" if result.warnings else "ok"
     lines = [f'<p class="status {kind}">{_text(summary_line(result))}</p>']
     if result.failures:
         number = len(result.failures)
@@ -179,10 +180,11 @@ def _card(kind: str, number: int, label: str) -> str:
     )
 
 
-def _findings(findings: tuple[Finding, ...]) -> list[str]:
+def _findings(findings: tuple[Finding, ...], title: str) -> list[str]:
+    """List findings under ``title``, grouped by file; nothing when empty."""
     if not findings:
         return []
-    lines = ["<h2>Problems</h2>"]
+    lines = [f"<h2>{_text(title)}</h2>"]
     # The findings arrive sorted by path, so each file forms one group.
     for path, group in groupby(findings, key=lambda finding: finding.path):
         in_file = list(group)

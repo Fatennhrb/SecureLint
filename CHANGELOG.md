@@ -16,6 +16,9 @@ What changed in each version of SecureLint, newest first.
 - `securelint baseline` records the findings a project has today in
   `.securelint-baseline.json`. Later scans report only new findings; the
   known ones are counted, and listed in the JSON and HTML reports.
+- A policy in `[tool.securelint.policy]` sets the severity and confidence
+  from which a finding blocks. Findings below it are reported as warnings
+  and do not fail the scan. Without a policy, every finding still blocks.
 
 ## 0.2.0 (2026-11-13)
 

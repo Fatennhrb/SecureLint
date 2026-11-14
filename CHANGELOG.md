@@ -2,7 +2,9 @@
 
 What changed in each version of SecureLint, newest first.
 
-## Unreleased
+## 0.3.0 (2026-11-14)
+
+Policy and configuration: what a team needs to use the scanner every day.
 
 - Settings in `pyproject.toml`: `exclude` leaves files and directories out
   of a scan, `ignore` turns rules off. A mistake in the settings stops the
@@ -19,6 +21,13 @@ What changed in each version of SecureLint, newest first.
 - A policy in `[tool.securelint.policy]` sets the severity and confidence
   from which a finding blocks. Findings below it are reported as warnings
   and do not fail the scan. Without a policy, every finding still blocks.
+- The corpus numbers are unchanged (54 reported, 9 missed, 4 reported by
+  mistake), and the scan is not slower than in 0.2.0 when both are timed
+  side by side.
+
+Known limits: `exclude` takes exact paths, not patterns; a silencing comment
+must be on the line where the finding is reported; editing a line listed in
+the baseline, even its comment, makes its finding new again.
 
 ## 0.2.0 (2026-11-13)
 

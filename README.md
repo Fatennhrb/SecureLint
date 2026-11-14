@@ -3,10 +3,11 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
-**Status:** version 0.2.0. `securelint scan` finds the Python files in a
+**Status:** version 0.3.0. `securelint scan` finds the Python files in a
 project, parses them and checks them against the five rules listed below,
 following values through variables, then writes a text, JSON or HTML report.
-See the
+A project can set which findings block, silence a checked finding, and accept
+the problems it already has while stopping new ones. See the
 [changelog](CHANGELOG.md) for what each version contains.
 
 ## Requirements
@@ -261,14 +262,21 @@ settings leave that folder out of a normal scan.
 Measured by scanning Python's own standard library with all five rules
 (`python benchmarks/scan_speed.py`), keeping the fastest of five runs:
 
-| | Version 0.1.0 | Version 0.2.0 |
-|---|---|---|
-| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
-| Time | 12.25 s | 11.64 s |
-| Speed | 299 files per second | 314 files per second |
-| Measured on | 2026-11-12 | 2026-11-13 |
+| | Version 0.1.0 | Version 0.2.0 | Version 0.3.0 |
+|---|---|---|---|
+| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
+| Time | 12.25 s | 11.64 s | 14.06 s |
+| Speed | 299 files per second | 314 files per second | 260 files per second |
+| Measured on | 2026-11-12 | 2026-11-13 | 2026-11-14 |
 
-Both were measured on the same laptop with Python 3.13.5 on Windows 11.
+All were measured on the same laptop with Python 3.13.5 on Windows 11.
+
+The laptop itself was slower on 2026-11-14, so the last column cannot be
+compared with the first two. Version 0.2.0 was timed again that day, right
+after version 0.3.0, and took 15.36 s. Measured side by side, version 0.3.0 is
+therefore not slower than version 0.2.0. Its new features (settings, silencing
+comments, fingerprints, the baseline and the policy) do their work only on
+files that have findings, or after the scan.
 
 Version 0.2.0 does more work for each file, because it follows values through
 variables, yet it is not slower. A first attempt at that feature walked every

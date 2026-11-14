@@ -33,10 +33,16 @@ enough to read and to store."""
 _BYTE_ORDER_MARK = b"\xef\xbb\xbf"
 
 
-def add_fingerprints(findings: Sequence[Finding], source: bytes) -> list[Finding]:
+def add_fingerprints(
+    findings: Sequence[Finding], source: bytes, path: str
+) -> list[Finding]:
     """Return the findings of one file, in the same order, with fingerprints.
 
-    ``source`` is the content of the file the findings are in.
+    ``source`` is the content of the file the findings are in. ``path`` is
+    the file's path as counted from the top of the project. It is used
+    instead of the path shown in the report, which depends on the folder
+    the scan was started on: the same finding must get the same
+    fingerprint whether the whole project or one of its folders is scanned.
     """
     # Some editors start a file with an invisible mark (a UTF-8 byte order
     # mark). It is not part of the first line's code, so it is removed:
@@ -61,7 +67,7 @@ def add_fingerprints(findings: Sequence[Finding], source: bytes) -> list[Finding
     for index in in_file_order:
         finding = findings[index]
         key = (finding.rule_id, texts[index])
-        fingerprints[index] = _hash(finding, texts[index], seen[key])
+        fingerprints[index] = _hash(finding.rule_id, path, texts[index], seen[key])
         seen[key] += 1
 
     return [
@@ -70,13 +76,13 @@ def add_fingerprints(findings: Sequence[Finding], source: bytes) -> list[Finding
     ]
 
 
-def _hash(finding: Finding, text: bytes, occurrence: int) -> str:
+def _hash(rule_id: str, path: str, text: bytes, occurrence: int) -> str:
     # The parts are separated by a byte that cannot appear in a rule id, a
     # path or a line of code, so two different findings can never be glued
     # into the same input.
     parts = [
-        finding.rule_id.encode(),
-        finding.path.encode(),
+        rule_id.encode(),
+        path.encode(),
         text,
         str(occurrence).encode(),
     ]

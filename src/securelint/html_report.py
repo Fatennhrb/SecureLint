@@ -122,6 +122,7 @@ def format_html(result: ScanResult) -> str:
         *_cards(result),
         *_findings(result.findings),
         *_silenced(result.silenced),
+        *_known(result.known),
         *_failures(result.failures),
         "<footer>The exact place of each problem is given as line and column, "
         "both counted from 1.</footer>",
@@ -224,6 +225,27 @@ def _silenced(silenced: tuple[Silenced, ...]) -> list[str]:
         lines.append(
             f'<li class="failure"><span class="rule">{_text(place)} '
             f"{_text(finding.rule_id)}</span> {_text(reason)}</li>"
+        )
+    lines += ["</ul>", "</section>"]
+    return lines
+
+
+def _known(known: tuple[Finding, ...]) -> list[str]:
+    """List the findings that the project's baseline file already holds."""
+    if not known:
+        return []
+    lines = [
+        "<h2>Known problems</h2>",
+        '<p class="meta">Listed in the baseline file, so they do not count as '
+        "new problems.</p>",
+        '<section class="file">',
+        "<ul>",
+    ]
+    for finding in known:
+        place = f"{finding.path}:{finding.line}"
+        lines.append(
+            f'<li class="failure"><span class="rule">{_text(place)} '
+            f"{_text(finding.rule_id)}</span> {_text(finding.message)}</li>"
         )
     lines += ["</ul>", "</section>"]
     return lines

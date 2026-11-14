@@ -79,9 +79,11 @@ def test_json_report_of_a_clean_scan() -> None:
             "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
             "failures": 0,
             "silenced": 0,
+            "known": 0,
         },
         "findings": [],
         "silenced": [],
+        "known": [],
         "failures": [],
     }
 

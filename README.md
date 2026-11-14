@@ -112,6 +112,34 @@ os.system(command)  # securelint: ignore[SL102] command is our own setting
   nothing on that line any more, the rule does not exist, or the comment is
   not written correctly.
 
+## Starting on a project that already has problems
+
+A project may have findings it cannot fix at once. The baseline lets it
+accept what exists today and still stop anything new:
+
+```bash
+securelint baseline     # remember today's findings
+securelint scan         # from now on, only new findings count
+```
+
+`securelint baseline` scans the whole project and writes
+`.securelint-baseline.json` at its top (next to `pyproject.toml` or the `.git`
+folder). Commit this file: the team then shares it, and every change to it is
+visible in code review.
+
+After that, `securelint scan`:
+
+- reports new findings as before, and only they change the exit code;
+- counts the known ones (`Known problems not shown: 12.`) and still lists them
+  in the JSON and HTML reports;
+- says so when a known finding is no longer found, so the baseline can be
+  written again and does not keep entries for problems that were fixed.
+
+A known finding stays known when the code around it moves, because it is
+matched by its fingerprint. Editing the reported line makes it new again.
+
+`securelint scan --no-baseline` shows everything, known or not.
+
 ## Rules
 
 | ID | Severity | What it reports |

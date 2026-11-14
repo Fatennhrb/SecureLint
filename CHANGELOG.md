@@ -13,6 +13,9 @@ What changed in each version of SecureLint, newest first.
   `SL001`.
 - Each finding has a `fingerprint` in the JSON report: an identity that
   does not change when lines are added or removed elsewhere in the file.
+- `securelint baseline` records the findings a project has today in
+  `.securelint-baseline.json`. Later scans report only new findings; the
+  known ones are counted, and listed in the JSON and HTML reports.
 
 ## 0.2.0 (2026-11-13)
 

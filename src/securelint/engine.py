@@ -13,7 +13,7 @@ from typing import ClassVar
 
 from securelint.context import FileContext, collect_imports
 from securelint.dataflow import analyse
-from securelint.discovery import discover
+from securelint.discovery import SourceFile, discover
 from securelint.fingerprint import add_fingerprints
 from securelint.model import Finding
 from securelint.parsing import ParsedFile, ParseFailure, parse
@@ -60,13 +60,25 @@ class ScanResult:
     """Findings hidden by a comment in the code. They are kept apart, not
     thrown away, so every report can show what was hidden and why."""
 
+    known: tuple[Finding, ...] = ()
+    """Findings listed in the project's baseline file: problems that were
+    already there when the project accepted them (see ``securelint.baseline``).
+    A scan itself leaves this empty."""
+
 
 def scan(
-    target: Path, rules: Sequence[Rule], exclude: Collection[Path] = ()
+    target: Path,
+    rules: Sequence[Rule],
+    exclude: Collection[Path] = (),
+    root: Path | None = None,
 ) -> ScanResult:
     """Scan the file or directory ``target`` with ``rules``.
 
     ``exclude`` holds full paths of files and directories to leave out.
+
+    ``root`` is the top directory of the project, as a full path. It only
+    affects fingerprints: they are built from each file's path under
+    ``root``, so they do not depend on which part of the project is scanned.
 
     Raises ``FileNotFoundError`` if ``target`` does not exist.
     """
@@ -98,7 +110,9 @@ def scan(
             # Kept and silenced findings are numbered together, so silencing
             # one of two identical lines does not change the other's identity.
             marked = add_fingerprints(
-                [*kept, *(item.finding for item in hidden)], result.source
+                [*kept, *(item.finding for item in hidden)],
+                result.source,
+                _path_in_project(source_file, root),
             )
             kept = marked[: len(kept)]
             hidden = [
@@ -142,6 +156,19 @@ def _check_file(
         for rule in rules_by_node_type.get(type(node), ()):
             findings.extend(rule.check(node, context))
     return findings
+
+
+def _path_in_project(source_file: SourceFile, root: Path | None) -> str:
+    """Return a file's path counted from the top of the project.
+
+    Falls back to the path shown in reports when the project's top is not
+    known, or the file is not under it.
+    """
+    if root is not None:
+        full_path = source_file.path.resolve()
+        if full_path.is_relative_to(root):
+            return full_path.relative_to(root).as_posix()
+    return source_file.relative_path
 
 
 def _sort_key(finding: Finding) -> tuple[str, int, int, str]:

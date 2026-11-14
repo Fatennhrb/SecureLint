@@ -53,6 +53,7 @@ def format_json(result: ScanResult) -> str:
             },
             "failures": len(result.failures),
             "silenced": len(result.silenced),
+            "known": len(result.known),
         },
         "findings": [_finding_fields(finding) for finding in result.findings],
         # Findings hidden by a comment in the code, with the reason given.
@@ -60,6 +61,8 @@ def format_json(result: ScanResult) -> str:
             {**_finding_fields(item.finding), "reason": item.reason}
             for item in result.silenced
         ],
+        # Findings listed in the project's baseline file.
+        "known": [_finding_fields(finding) for finding in result.known],
         "failures": [
             {
                 "path": failure.relative_path,
@@ -91,11 +94,14 @@ def summary_line(result: ScanResult) -> str:
     """Return the result in words, e.g. ``2 problems found in 1 file (2 high).``
 
     When comments in the code silenced some findings, their number follows:
-    ``No problems found in 3 files. Silenced by a comment: 2.``
+    ``No problems found in 3 files. Silenced by a comment: 2.`` The number
+    of findings listed in the baseline file is given the same way.
     """
     summary = _findings_summary(result)
     if result.silenced:
         summary += f" Silenced by a comment: {len(result.silenced)}."
+    if result.known:
+        summary += f" Known problems not shown: {len(result.known)}."
     return summary
 
 

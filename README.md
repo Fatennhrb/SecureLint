@@ -3,12 +3,13 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
-**Status:** version 0.4.0. `securelint scan` finds the Python files in a
+**Status:** version 0.5.0. `securelint scan` finds the Python files in a
 project, parses them and checks them against the five rules listed below,
 following values through variables, then writes a text, JSON, HTML or SARIF
-report. A project can set which findings block, silence a checked finding, and
-accept the problems it already has while stopping new ones. As a GitHub
-Action, it reports findings on the lines a pull request changed. See the
+report. It can add the vulnerable dependencies and unsafe Dockerfile settings
+that Trivy found. A project can set which findings block, silence a checked
+finding, and accept the problems it already has while stopping new ones. As a
+GitHub Action, it reports findings on the lines a pull request changed. See the
 [changelog](CHANGELOG.md) for what each version contains.
 
 ## Requirements
@@ -217,7 +218,7 @@ jobs:
         with:
           fetch-depth: 0 # the whole history, to find the changed lines
           persist-credentials: false
-      - uses: Fatennhrb/SecureLint@v0.4.0 # from version 0.4.0; pin the commit
+      - uses: Fatennhrb/SecureLint@v0.5.0 # pin the commit in real use
 ```
 
 On a pull request, SecureLint reports the findings on the lines the pull
@@ -229,6 +230,9 @@ See it on a real pull request in the demo repository:
 [securelint-demo pull request #1](https://github.com/Fatennhrb/securelint-demo/pull/1)
 fails because of a shell command built from typed input, shows a warning for
 a hard-coded password, and leaves alone an old problem listed in its baseline.
+[Pull request #2](https://github.com/Fatennhrb/securelint-demo/pull/2) runs
+Trivy too: it fails on a Dockerfile that runs as `root`, and warns about four
+known vulnerabilities in an old `requests`.
 
 | Input | Default | Meaning |
 |-------|---------|---------|
@@ -254,9 +258,10 @@ The version is pinned on purpose: Trivy's own release 0.69.4 was compromised in
 March 2026 (CVE-2026-33634), so a new version is only used after it has been
 checked and the pin changed.
 
-The Action installs SecureLint from its own files, so `@v0.4.0` always runs
-SecureLint 0.4.0. Settings, silencing comments, the baseline and the policy
-are read from the scanned project as usual.
+The Action installs SecureLint from its own files, so `@v0.5.0` always runs
+SecureLint 0.5.0; the `trivy` input exists from that version. Settings,
+silencing comments, the baseline and the policy are read from the scanned
+project as usual.
 
 ## Checking only what a change touched
 
@@ -412,12 +417,12 @@ settings leave that folder out of a normal scan.
 Measured by scanning Python's own standard library with all five rules
 (`python benchmarks/scan_speed.py`), keeping the fastest of five runs:
 
-| | Version 0.1.0 | Version 0.2.0 | Version 0.3.0 | Version 0.4.0 |
-|---|---|---|---|---|
-| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
-| Time | 12.25 s | 11.64 s | 14.06 s | 11.68 s |
-| Speed | 299 files per second | 314 files per second | 260 files per second | 313 files per second |
-| Measured on | 2026-11-12 | 2026-11-13 | 2026-11-14 | 2026-11-15 |
+| | Version 0.1.0 | Version 0.2.0 | Version 0.3.0 | Version 0.4.0 | Version 0.5.0 |
+|---|---|---|---|---|---|
+| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
+| Time | 12.25 s | 11.64 s | 14.06 s | 11.68 s | 11.77 s |
+| Speed | 299 files per second | 314 files per second | 260 files per second | 313 files per second | 311 files per second |
+| Measured on | 2026-11-12 | 2026-11-13 | 2026-11-14 | 2026-11-15 | 2026-11-15 |
 
 All were measured on the same laptop with Python 3.13.5 on Windows 11.
 
@@ -431,6 +436,11 @@ files that have findings, or after the scan.
 Version 0.3.0 was timed again on 2026-11-15, right after version 0.4.0, and
 took 11.65 s: the two are as fast as each other. The 0.4.0 features (SARIF,
 GitHub notes, changed lines) only change what is reported after the scan.
+
+Version 0.4.0 was timed again right before version 0.5.0 and took 11.75 s, so
+these two are as fast as each other too. This benchmark scans Python code
+only; reading a Trivy report adds the time Trivy itself takes, which depends
+on Trivy and not on SecureLint.
 
 Version 0.2.0 does more work for each file, because it follows values through
 variables, yet it is not slower. A first attempt at that feature walked every

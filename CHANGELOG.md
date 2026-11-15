@@ -2,7 +2,10 @@
 
 What changed in each version of SecureLint, newest first.
 
-## Unreleased
+## 0.5.0 (2026-11-15)
+
+Dependencies and Dockerfiles: Trivy's findings go through the same gate as
+the code's.
 
 - `--trivy-report FILE` adds the vulnerable dependencies found by Trivy
   (`trivy fs --format json`) to the scan, as findings of rule `SL201` on the
@@ -14,7 +17,18 @@ What changed in each version of SecureLint, newest first.
   points to.
 - The Action's `trivy` input downloads Trivy 0.76.2, checks it against a
   pinned checksum before running it, and adds its report to the scan.
-  SecureLint's own CI uses it.
+  SecureLint's own CI uses it, and
+  [securelint-demo pull request #2](https://github.com/Fatennhrb/securelint-demo/pull/2)
+  shows it on an old dependency and a Dockerfile.
+- The summary counts the files a Trivy report has problems in among the
+  files checked.
+- The corpus numbers are unchanged (54 reported, 9 missed, 4 reported by
+  mistake).
+
+Known limits: SecureLint does not run Trivy itself outside the Action, and
+does not scan built container images; a dependency is reported on the line
+that names it, or on line 1 when no line does; "found in N files" counts the
+files checked, not only those with problems.
 
 ## 0.4.0 (2026-11-15)
 

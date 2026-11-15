@@ -3,11 +3,12 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
-**Status:** version 0.3.0. `securelint scan` finds the Python files in a
+**Status:** version 0.4.0. `securelint scan` finds the Python files in a
 project, parses them and checks them against the five rules listed below,
-following values through variables, then writes a text, JSON or HTML report.
-A project can set which findings block, silence a checked finding, and accept
-the problems it already has while stopping new ones. See the
+following values through variables, then writes a text, JSON, HTML or SARIF
+report. A project can set which findings block, silence a checked finding, and
+accept the problems it already has while stopping new ones. As a GitHub
+Action, it reports findings on the lines a pull request changed. See the
 [changelog](CHANGELOG.md) for what each version contains.
 
 ## Requirements
@@ -224,6 +225,11 @@ request changed, as notes on those lines, adds a summary table to the job's
 page, and fails the check when the project's policy says something blocks. On
 a push, it scans everything. It needs no token and no write permission.
 
+See it on a real pull request in the demo repository:
+[securelint-demo pull request #1](https://github.com/Fatennhrb/securelint-demo/pull/1)
+fails because of a shell command built from typed input, shows a warning for
+a hard-coded password, and leaves alone an old problem listed in its baseline.
+
 | Input | Default | Meaning |
 |-------|---------|---------|
 | `path` | `.` | File or directory to scan. |
@@ -358,21 +364,25 @@ settings leave that folder out of a normal scan.
 Measured by scanning Python's own standard library with all five rules
 (`python benchmarks/scan_speed.py`), keeping the fastest of five runs:
 
-| | Version 0.1.0 | Version 0.2.0 | Version 0.3.0 |
-|---|---|---|---|
-| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
-| Time | 12.25 s | 11.64 s | 14.06 s |
-| Speed | 299 files per second | 314 files per second | 260 files per second |
-| Measured on | 2026-11-12 | 2026-11-13 | 2026-11-14 |
+| | Version 0.1.0 | Version 0.2.0 | Version 0.3.0 | Version 0.4.0 |
+|---|---|---|---|---|
+| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
+| Time | 12.25 s | 11.64 s | 14.06 s | 11.68 s |
+| Speed | 299 files per second | 314 files per second | 260 files per second | 313 files per second |
+| Measured on | 2026-11-12 | 2026-11-13 | 2026-11-14 | 2026-11-15 |
 
 All were measured on the same laptop with Python 3.13.5 on Windows 11.
 
-The laptop itself was slower on 2026-11-14, so the last column cannot be
-compared with the first two. Version 0.2.0 was timed again that day, right
+The laptop itself was slower on 2026-11-14, so the 0.3.0 column cannot be
+compared with the others. Version 0.2.0 was timed again that day, right
 after version 0.3.0, and took 15.36 s. Measured side by side, version 0.3.0 is
 therefore not slower than version 0.2.0. Its new features (settings, silencing
 comments, fingerprints, the baseline and the policy) do their work only on
 files that have findings, or after the scan.
+
+Version 0.3.0 was timed again on 2026-11-15, right after version 0.4.0, and
+took 11.65 s: the two are as fast as each other. The 0.4.0 features (SARIF,
+GitHub notes, changed lines) only change what is reported after the scan.
 
 Version 0.2.0 does more work for each file, because it follows values through
 variables, yet it is not slower. A first attempt at that feature walked every

@@ -2,7 +2,9 @@
 
 What changed in each version of SecureLint, newest first.
 
-## Unreleased
+## 0.4.0 (2026-11-15)
+
+GitHub integration: findings appear on the lines a pull request changed.
 
 - `--format sarif` writes the result in SARIF 2.1.0, the format GitHub reads
   for security tools, with paths from the top of the project and each
@@ -15,6 +17,16 @@ What changed in each version of SecureLint, newest first.
 - The repository is a GitHub Action (`action.yml`): on a pull request it
   reports the findings on the changed lines and fails when something
   blocks. It needs no token and no write permission.
+- SecureLint's own CI runs the Action on its code, and a demo repository,
+  [securelint-demo](https://github.com/Fatennhrb/securelint-demo), shows it
+  on a real pull request.
+- The corpus numbers are unchanged (54 reported, 9 missed, 4 reported by
+  mistake).
+
+Known limits: the Action does not upload SARIF itself; `--changed-since` needs
+the target branch in the local history (`fetch-depth: 0`); a finding is shown
+only when its own line changed, even if the change that caused it is on
+another line.
 
 ## 0.3.0 (2026-11-14)
 

@@ -7,6 +7,9 @@ What changed in each version of SecureLint, newest first.
 - `--format sarif` writes the result in SARIF 2.1.0, the format GitHub reads
   for security tools, with paths from the top of the project and each
   finding's fingerprint.
+- `--changed-since BRANCH` reports only findings on lines the current
+  branch added or changed since it left BRANCH, asking Git for those
+  lines. Findings elsewhere are counted and listed, not reported.
 
 ## 0.3.0 (2026-11-14)
 

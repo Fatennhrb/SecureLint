@@ -16,6 +16,11 @@ from securelint.baseline import (
     save_baseline,
     split_known,
 )
+from securelint.changes import (
+    ChangesError,
+    find_changed_lines,
+    split_outside_change,
+)
 from securelint.config import Config, ConfigError, load_config
 from securelint.engine import Rule, ScanResult, scan
 from securelint.html_report import format_html
@@ -87,6 +92,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="report every finding, including those listed in the baseline file",
     )
+    scan_parser.add_argument(
+        "--changed-since",
+        metavar="BRANCH",
+        help=(
+            "report only findings on lines changed since the current branch "
+            "left BRANCH (for example: main)"
+        ),
+    )
     baseline_parser = commands.add_parser(
         "baseline",
         help="record today's findings as known",
@@ -114,7 +127,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "scan":
-        return _run_scan(args.path, args.format, use_baseline=not args.no_baseline)
+        return _run_scan(
+            args.path,
+            args.format,
+            use_baseline=not args.no_baseline,
+            changed_since=args.changed_since,
+        )
     if args.command == "baseline":
         return _run_baseline(args.path)
     parser.print_help()
@@ -134,7 +152,13 @@ class _Project:
         return self.root / BASELINE_FILE_NAME
 
 
-def _run_scan(target: Path, report_format: str, *, use_baseline: bool) -> int:
+def _run_scan(
+    target: Path,
+    report_format: str,
+    *,
+    use_baseline: bool,
+    changed_since: str | None = None,
+) -> int:
     project = _find_project(target)
     if project is None:
         return EXIT_ERROR
@@ -156,6 +180,18 @@ def _run_scan(target: Path, report_format: str, *, use_baseline: bool) -> int:
         return EXIT_ERROR
     if known is not None:
         result = split_known(result, known)
+    if changed_since is not None:
+        try:
+            changes = find_changed_lines(target, changed_since)
+        except ChangesError as error:
+            # Reporting nothing here would look like a clean change.
+            _print_error(f"error: {error}")
+            return EXIT_ERROR
+        _print_error(
+            f"reporting only lines changed since {changed_since} "
+            f"(compared with commit {changes.merge_base[:12]})"
+        )
+        result = split_outside_change(result, changes, target)
     # Last of all: the policy only sorts what is left into "blocks" and
     # "warning". Known problems are neither.
     result = apply_policy(result, project.config.policy)

@@ -80,6 +80,10 @@ class ScanResult:
     report that needs paths from the top of the project (SARIF) puts this
     in front of them."""
 
+    outside_change: tuple[Finding, ...] = ()
+    """Findings on lines that the change being checked did not touch (see
+    ``securelint.changes``). A scan itself leaves this empty."""
+
 
 def scan(
     target: Path,

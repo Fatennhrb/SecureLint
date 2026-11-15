@@ -81,11 +81,13 @@ def test_json_report_of_a_clean_scan() -> None:
             "warnings": 0,
             "silenced": 0,
             "known": 0,
+            "outside_change": 0,
         },
         "findings": [],
         "warnings": [],
         "silenced": [],
         "known": [],
+        "outside_change": [],
         "failures": [],
     }
 

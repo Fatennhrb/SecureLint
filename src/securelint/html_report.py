@@ -124,6 +124,7 @@ def format_html(result: ScanResult) -> str:
         *_findings(result.warnings, "Warnings"),
         *_silenced(result.silenced),
         *_known(result.known),
+        *_outside(result.outside_change),
         *_failures(result.failures),
         "<footer>The exact place of each problem is given as line and column, "
         "both counted from 1.</footer>",
@@ -244,6 +245,27 @@ def _known(known: tuple[Finding, ...]) -> list[str]:
         "<ul>",
     ]
     for finding in known:
+        place = f"{finding.path}:{finding.line}"
+        lines.append(
+            f'<li class="failure"><span class="rule">{_text(place)} '
+            f"{_text(finding.rule_id)}</span> {_text(finding.message)}</li>"
+        )
+    lines += ["</ul>", "</section>"]
+    return lines
+
+
+def _outside(outside: tuple[Finding, ...]) -> list[str]:
+    """List the findings on lines the change being checked did not touch."""
+    if not outside:
+        return []
+    lines = [
+        "<h2>Outside the changed lines</h2>",
+        '<p class="meta">On lines this change did not touch, so they do not '
+        "count for it.</p>",
+        '<section class="file">',
+        "<ul>",
+    ]
+    for finding in outside:
         place = f"{finding.path}:{finding.line}"
         lines.append(
             f'<li class="failure"><span class="rule">{_text(place)} '

@@ -61,6 +61,7 @@ def format_json(result: ScanResult) -> str:
             "warnings": len(result.warnings),
             "silenced": len(result.silenced),
             "known": len(result.known),
+            "outside_change": len(result.outside_change),
         },
         # The findings that block. Without a policy, that is all of them.
         "findings": [_finding_fields(finding) for finding in result.findings],
@@ -73,6 +74,10 @@ def format_json(result: ScanResult) -> str:
         ],
         # Findings listed in the project's baseline file.
         "known": [_finding_fields(finding) for finding in result.known],
+        # Findings on lines the change did not touch (--changed-since).
+        "outside_change": [
+            _finding_fields(finding) for finding in result.outside_change
+        ],
         "failures": [
             {
                 "path": failure.relative_path,
@@ -115,6 +120,8 @@ def summary_line(result: ScanResult) -> str:
         summary += f" Silenced by a comment: {len(result.silenced)}."
     if result.known:
         summary += f" Known problems not shown: {len(result.known)}."
+    if result.outside_change:
+        summary += f" Outside the changed lines: {len(result.outside_change)}."
     return summary
 
 

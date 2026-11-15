@@ -69,7 +69,7 @@ written, with a level that follows the policy:
 |-------------|---------|
 | `error` | The finding blocks. |
 | `warning` | The policy reports it without blocking, or a comment silenced it (it is then also marked as suppressed). |
-| `note` | The finding is listed in the baseline file (marked `"baselineState": "unchanged"`). |
+| `note` | The finding is listed in the baseline file (marked `"baselineState": "unchanged"`), or it is on a line the change did not touch (with `--changed-since`). |
 
 Paths are written from the top of the project, whatever folder was scanned,
 and each result carries its fingerprint so GitHub can follow it between scans.
@@ -183,6 +183,29 @@ A known finding stays known when the code around it moves, because it is
 matched by its fingerprint. Editing the reported line makes it new again.
 
 `securelint scan --no-baseline` shows everything, known or not.
+
+## Checking only what a change touched
+
+```bash
+securelint scan --changed-since main
+```
+
+SecureLint asks Git which lines the current branch added or changed since it
+left `main`, including changes not committed yet, and reports only the findings
+on those lines. A file Git does not track yet counts as changed in full.
+Findings elsewhere are counted (`Outside the changed lines: 5.`) and listed in
+the JSON, HTML and SARIF reports, but they do not change the exit code.
+
+Settings, silencing comments, the baseline and the policy all still apply.
+
+If Git is missing, the folder is not in a Git repository, or the branch cannot
+be found, the scan stops with exit code 2: reporting nothing would look like a
+clean change. In GitHub Actions, check out the whole history
+(`fetch-depth: 0`), or Git cannot find where the branch started.
+
+A change can make an unchanged line dangerous, for example by changing a value
+that line reads. Such a finding is counted as outside the change, so run the
+full scan as well, for example on `main` after each merge.
 
 ## Rules
 

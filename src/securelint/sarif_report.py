@@ -12,7 +12,8 @@ project's policy treats it:
 * ``warning``: the policy reports it without blocking, or a comment in the
   code silenced it (it then also carries a SARIF ``suppressions`` entry);
 * ``note``: the finding is listed in the project's baseline file (it then
-  also carries ``"baselineState": "unchanged"``).
+  also carries ``"baselineState": "unchanged"``), or it is on a line the
+  change being checked did not touch.
 
 Paths are written from the top of the project, the way GitHub expects
 them, whatever folder the scan was started on.
@@ -60,6 +61,9 @@ def format_sarif(result: ScanResult) -> str:
         (finding, {"level": "note", "baselineState": "unchanged"})
         for finding in result.known
     ]
+    # Findings outside the change are still written: an upload that left
+    # them out could tell GitHub they had been fixed.
+    entries += [(finding, {"level": "note"}) for finding in result.outside_change]
     for item in result.silenced:
         suppression: dict[str, Any] = {"kind": "inSource"}
         if item.reason:

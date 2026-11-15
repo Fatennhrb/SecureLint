@@ -322,6 +322,54 @@ The report is checked before it is used: one that cannot be read, is not a
 Trivy JSON report, or names a file outside the scanned folder stops the scan
 with exit code 2, instead of being taken as "no problems".
 
+## Explaining findings with an AI
+
+`scan --explain` adds a short explanation, written by an AI, under each
+finding shown: why the code is risky here and how to fix it. It is off unless
+asked for, and the AI is the one the project chooses in its settings:
+
+```toml
+[tool.securelint.ai]
+provider = "anthropic"            # Claude
+model = "claude-opus-5-5"
+api-key-env = "ANTHROPIC_API_KEY" # the variable that holds the key
+```
+
+```toml
+[tool.securelint.ai]
+provider = "openai-compatible"    # OpenAI, or a model on this machine
+model = "llama3"
+base-url = "http://localhost:11434/v1"  # here: Ollama, no key needed
+```
+
+| Setting | Meaning |
+|---------|---------|
+| `provider` | `"anthropic"` or `"openai-compatible"`. |
+| `model` | The provider's name for the model. |
+| `base-url` | Only for `openai-compatible`: where the service answers. It must be `https://`, or `http://` on this machine. |
+| `api-key-env` | The environment variable that holds the key. The key itself is never written in the settings: a setting that looks like a key stops the scan. Optional for Anthropic, which then finds its key itself; leave it out for a local model. |
+
+The `anthropic` provider uses Anthropic's own Python package, installed only
+when asked for: `pip install "securelint[anthropic]"`. SecureLint itself still
+needs nothing beyond Python. With the Claude models that support it, a request
+the model declines is answered by Anthropic's fallback model in the same call.
+The `openai-compatible` provider needs no package.
+
+What the AI can and cannot do:
+
+- It only explains. Explanations are added after the policy has decided what
+  blocks, so they never change the exit code; one that fails is skipped and
+  said on standard error.
+- It receives the finding and the 3 lines around it, never the whole file. A
+  hard-coded secret, the value of a name that sounds secret, and text shaped
+  like a known key are replaced by `***` before anything is sent.
+- Its answer must be the short JSON the prompt asks for, or it is dropped.
+  Control characters are removed, and every report labels it "AI explanation
+  (may be wrong)".
+- At most 10 findings are explained in one scan, blocking ones first. Each
+  explanation is a paid request to the provider, unless the model runs on this
+  machine.
+
 ## Rules
 
 | ID | Severity | What it reports |

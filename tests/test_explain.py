@@ -233,5 +233,5 @@ def test_without_the_option_nothing_is_asked(
     assert "AI explanation" not in capsys.readouterr().out
 
 
-def test_no_provider_can_be_set_up_yet() -> None:
+def test_without_ai_settings_there_is_no_explainer() -> None:
     assert cli.make_explainer(Config()) is None

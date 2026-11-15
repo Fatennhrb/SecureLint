@@ -7,8 +7,14 @@ What changed in each version of SecureLint, newest first.
 - `scan --explain` adds a short explanation, written by an AI, under each
   finding shown (at most 10), in the text and JSON reports. It is added
   after the policy has decided, so it never changes what blocks or the exit
-  code, and an explanation that fails is only skipped. No AI provider can be
-  set up yet: for now the option only says so.
+  code, and an explanation that fails is only skipped.
+- The AI is chosen in `[tool.securelint.ai]`: `anthropic` (Claude, through
+  Anthropic's Python package, an optional extra:
+  `pip install "securelint[anthropic]"`) or `openai-compatible` (OpenAI, or a
+  local model such as Ollama, with no package). The key is read from an
+  environment variable; a key written in the settings stops the scan. A
+  `base-url` must be `https://`, or `http://` on this machine, and redirects
+  are not followed.
 - What is sent to explain a finding is the finding and the 3 lines before
   and after it, never the whole file. Before it leaves, every string on the
   line of a hard-coded secret, the value of any name that sounds secret, and

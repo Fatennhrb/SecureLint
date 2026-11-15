@@ -12,22 +12,50 @@ with an error instead of being skipped. A typo such as ``exlude`` would
 otherwise turn a setting off without anyone noticing.
 """
 
+import re
 import tomllib
 from collections.abc import Collection
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from securelint.model import Confidence, Severity
 from securelint.policy import Policy
 
 _FILE_NAME = "pyproject.toml"
-_KNOWN_SETTINGS = frozenset({"exclude", "ignore", "policy"})
+_KNOWN_SETTINGS = frozenset({"exclude", "ignore", "policy", "ai"})
 _KNOWN_POLICY_SETTINGS = frozenset({"block-severity", "block-confidence"})
+_KNOWN_AI_SETTINGS = frozenset({"provider", "model", "base-url", "api-key-env"})
+
+PROVIDERS = ("anthropic", "openai-compatible")
+"""The AI providers ``scan --explain`` can use."""
+
+# Addresses on this machine: the only ones allowed without HTTPS.
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_VARIABLE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 class ConfigError(Exception):
     """The settings cannot be used; the message says what to fix."""
+
+
+@dataclass(frozen=True, slots=True)
+class AISettings:
+    """Which AI explains findings, from ``[tool.securelint.ai]``."""
+
+    provider: str
+    """One of ``PROVIDERS``."""
+
+    model: str
+    """The provider's name for the model, e.g. ``claude-opus-5-5``."""
+
+    base_url: str | None = None
+    """Where an OpenAI-compatible service answers, e.g. ``http://localhost:11434/v1``."""
+
+    api_key_env: str | None = None
+    """The environment variable that holds the key. The key itself is never
+    written in the settings file, which is usually committed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +73,9 @@ class Config:
 
     policy: Policy = field(default_factory=Policy)
     """Which findings block and which are warnings."""
+
+    ai: AISettings | None = None
+    """The AI used by ``scan --explain``; ``None`` when none is set up."""
 
 
 def load_config(target: Path, known_rule_ids: Collection[str]) -> Config:
@@ -94,6 +125,74 @@ def load_config(target: Path, known_rule_ids: Collection[str]) -> Config:
         exclude=tuple(exclude),
         ignore=frozenset(ignore),
         policy=_policy(table, path),
+        ai=_ai(table, path),
+    )
+
+
+def _ai(table: dict[str, Any], path: Path) -> AISettings | None:
+    """Read the ``[tool.securelint.ai]`` table; ``None`` without one."""
+    if "ai" not in table:
+        return None
+    settings = table["ai"]
+    where = f"{path}: [tool.securelint.ai]"
+    if not isinstance(settings, dict):
+        raise ConfigError(f"{where} must be a table")
+    if any("key" in name and name != "api-key-env" for name in settings):
+        # The settings file is usually committed: a key in it is a leak.
+        raise ConfigError(
+            f"{where} must not hold a key; write the name of the environment "
+            'variable that holds it instead, such as api-key-env = "ANTHROPIC_API_KEY"'
+        )
+    unknown = sorted(set(settings) - _KNOWN_AI_SETTINGS)
+    if unknown:
+        raise ConfigError(
+            f"{where}: unknown setting {unknown[0]!r} "
+            f"(known settings: {', '.join(sorted(_KNOWN_AI_SETTINGS))})"
+        )
+
+    provider = settings.get("provider")
+    if provider not in PROVIDERS:
+        choices = ", ".join(f'"{name}"' for name in PROVIDERS)
+        raise ConfigError(f"{where}: provider must be one of {choices}")
+    model = settings.get("model")
+    if not isinstance(model, str) or not model.strip():
+        raise ConfigError(f'{where}: model must name a model, such as model = "..."')
+
+    base_url = settings.get("base-url")
+    if provider == "openai-compatible":
+        if base_url is None:
+            raise ConfigError(f"{where}: an openai-compatible provider needs base-url")
+        _check_base_url(base_url, where)
+    elif base_url is not None:
+        raise ConfigError(f"{where}: base-url is only for openai-compatible providers")
+
+    api_key_env = settings.get("api-key-env")
+    if api_key_env is not None and (
+        not isinstance(api_key_env, str) or not _VARIABLE_NAME.fullmatch(api_key_env)
+    ):
+        raise ConfigError(
+            f"{where}: api-key-env must be the name of an environment variable"
+        )
+    return AISettings(
+        provider=provider,
+        model=model.strip(),
+        base_url=base_url,
+        api_key_env=api_key_env,
+    )
+
+
+def _check_base_url(base_url: object, where: str) -> None:
+    # Code is sent to this address: never in clear text over a network.
+    if isinstance(base_url, str):
+        parts = urlsplit(base_url)
+        local = parts.hostname in _LOCAL_HOSTS
+        secure = parts.scheme == "https" or (parts.scheme == "http" and local)
+        no_login = not parts.username and not parts.password
+        if secure and parts.hostname and no_login:
+            return
+    raise ConfigError(
+        f"{where}: base-url must be an https:// address, or http:// on this "
+        "machine (localhost), without a name or password in it"
     )
 
 

@@ -15,7 +15,11 @@ authors = [{ name = "Faten Harbaoui" }]
 dependencies = []
 
 [project.optional-dependencies]
+# Explanations by Claude (`scan --explain` with provider = "anthropic").
+anthropic = ["anthropic>=2.8,<3"]
 dev = [
+    # So the tests also check the Claude provider against the real package.
+    "anthropic>=2.8,<3",
     "pytest>=8",
     # Ruff adds and changes rules between 0.x minor releases, so stay within
     # one minor version: a dependency update alone must never break the build.

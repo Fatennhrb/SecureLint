@@ -29,6 +29,7 @@ from securelint.github_report import format_github, format_step_summary
 from securelint.html_report import format_html
 from securelint.model import Finding
 from securelint.policy import apply_policy
+from securelint.providers import ProviderError, make_provider
 from securelint.report import format_json, format_text
 from securelint.rules import ALL_RULES
 from securelint.sarif_report import format_sarif
@@ -353,15 +354,25 @@ def _scan_project(
 def make_explainer(config: Config) -> Explainer | None:
     """Return the explainer the project's settings ask for; None if none.
 
-    No AI provider can be set up yet, so this always returns None.
+    Raises ``ProviderError`` when the provider cannot be set up.
     """
-    return None
+    if config.ai is None:
+        return None
+    return make_provider(config.ai)
 
 
 def _explain(result: ScanResult, config: Config, target: Path) -> ScanResult:
-    explainer = make_explainer(config)
+    try:
+        explainer = make_explainer(config)
+    except ProviderError as error:
+        # The scan's result is already decided: it is reported as it is.
+        _print_error(f"no explanations were added: {error}")
+        return result
     if explainer is None:
-        _print_error("no AI provider is set up yet; no explanations were added")
+        _print_error(
+            "no explanations were added: no AI provider is set up in "
+            "[tool.securelint.ai]"
+        )
         return result
     # Paths in findings start at the scanned folder (or at the scanned
     # file's folder).

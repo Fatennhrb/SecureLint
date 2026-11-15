@@ -271,27 +271,37 @@ A change can make an unchanged line dangerous, for example by changing a value
 that line reads. Such a finding is counted as outside the change, so run the
 full scan as well, for example on `main` after each merge.
 
-## Checking dependencies with Trivy
+## Checking dependencies and Dockerfiles with Trivy
 
 SecureLint checks the code you write. The packages a project uses can have
-known vulnerabilities too, and [Trivy](https://trivy.dev) finds them.
-SecureLint does not run Trivy: run it yourself on the same folder, then give
-SecureLint its JSON report.
+known vulnerabilities too, and its Dockerfile can have unsafe settings;
+[Trivy](https://trivy.dev) finds both. SecureLint does not run Trivy: run it
+yourself on the same folder, then give SecureLint its JSON report.
 
 ```console
-trivy fs --format json --output trivy.json .
+trivy fs --scanners vuln,misconfig --format json --output trivy.json .
 securelint scan . --trivy-report trivy.json
 ```
 
 Each vulnerability becomes a finding of rule `SL201`, reported on the line of
 `requirements.txt` (or of the lock file) that names the package, with the
-installed version and the version that fixes it. The baseline, the policy,
-`--changed-since` and every report format work for them as for the code.
+installed version and the version that fixes it.
+
+Each failed check of a Dockerfile (or of another configuration file Trivy
+checks) becomes a finding of rule `SL202`, on the line Trivy points to, with
+Trivy's check ID and how to fix it. A check about the whole file, such as a
+missing `USER` line, is reported on line 1. Checks the file passed, and those
+the project accepted as exceptions, are not reported. Trivy's secret scanner is
+not read; rule `SL104` looks for secrets in the code.
+
+The baseline, the policy, `--changed-since` and every report format work for
+these findings as for the code's.
 `securelint baseline --trivy-report trivy.json` records them as known; run
 Trivy on the top of the project for that.
 
 A dependency finding keeps its identity when other lines of the file change,
-and becomes new when the package's version changes.
+and becomes new when the package's version changes. A Dockerfile finding is
+identified like the code's: by its check and the text of its line.
 
 The report is checked before it is used: one that cannot be read, is not a
 Trivy JSON report, or names a file outside the scanned folder stops the scan
@@ -307,7 +317,8 @@ with exit code 2, instead of being taken as "no problems".
 | SL103 | High | Data loaded with a format that can run code: `pickle`, `dill` or `marshal` loading, and `yaml.load()` without a safe loader. `yaml.safe_load()` and JSON are not reported. |
 | SL104 | Medium | A password or key written directly in the code, such as `password = "hunter2"`, `connect(password="hunter2")` or `{"api_key": "sk-live-123"}`. The rule reads the name, so `password_field = "password"`, empty strings and placeholders such as `"<password>"` are not reported. The secret itself is never printed in the report. |
 | SL105 | High | An SQL query with values put into its text, passed to `execute()`, `executemany()`, `executescript()` or `raw()`: `"..." + name`, an f-string, `"..." % name` or `"...".format(name)`. A fixed query with the values passed separately, such as `execute("... WHERE id = ?", (user_id,))`, is not reported. |
-| SL201 | From Trivy | A dependency with a known vulnerability, read from a Trivy report (see [Checking dependencies with Trivy](#checking-dependencies-with-trivy)). Critical, high, medium and low come from Trivy; a vulnerability Trivy has no severity for yet counts as medium. |
+| SL201 | From Trivy | A dependency with a known vulnerability, read from a Trivy report (see [Checking dependencies and Dockerfiles with Trivy](#checking-dependencies-and-dockerfiles-with-trivy)). Critical, high, medium and low come from Trivy; a vulnerability Trivy has no severity for yet counts as medium. |
+| SL202 | From Trivy | An unsafe setting in a Dockerfile or another configuration file, read from a Trivy report: for example, a container that runs as `root`. Medium confidence: the setting may be on purpose. |
 
 Rules follow imports, so a function is recognised under any name the file gives
 it: `import subprocess as sp`, `from os import system` and

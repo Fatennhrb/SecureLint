@@ -31,7 +31,7 @@ from securelint.policy import apply_policy
 from securelint.report import format_json, format_text
 from securelint.rules import ALL_RULES
 from securelint.sarif_report import format_sarif
-from securelint.trivy import RULE_ID as TRIVY_RULE_ID
+from securelint.trivy import TITLES as TRIVY_RULES
 from securelint.trivy import TrivyReportError, read_trivy_report
 
 # The report formats `scan --format` accepts, and the function behind each.
@@ -111,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         type=Path,
         help=(
-            "also report the vulnerable dependencies in this Trivy JSON report "
+            "also report the problems in this Trivy JSON report "
             "(from `trivy fs --format json` on the same folder)"
         ),
     )
@@ -135,7 +135,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         type=Path,
         help=(
-            "also report the vulnerable dependencies in this Trivy JSON report "
+            "also report the problems in this Trivy JSON report "
             "(from `trivy fs --format json` on the top of the project)"
         ),
     )
@@ -281,7 +281,7 @@ def _run_baseline(place: Path, trivy_report: Path | None = None) -> int:
 def _find_project(target: Path) -> _Project | None:
     """Read the settings and find the top of the project; None after an error."""
     try:
-        config = load_config(target, [*(rule.rule_id for rule in RULES), TRIVY_RULE_ID])
+        config = load_config(target, [*(rule.rule_id for rule in RULES), *TRIVY_RULES])
     except ConfigError as error:
         # Settings that cannot be trusted stop the scan: guessing what
         # they meant could leave out files the user wanted checked.

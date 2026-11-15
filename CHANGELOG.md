@@ -9,6 +9,9 @@ What changed in each version of SecureLint, newest first.
   line that names the package. They go through the baseline, the policy and
   every report like the other findings. SecureLint reads the report; it does
   not run Trivy.
+- The same report's failed configuration checks (Trivy's `misconfig`
+  scanner) become findings of rule `SL202`, on the Dockerfile line Trivy
+  points to.
 
 ## 0.4.0 (2026-11-15)
 

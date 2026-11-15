@@ -28,8 +28,7 @@ from securelint.engine import ScanResult
 from securelint.model import Finding, Severity
 from securelint.rules import ALL_RULES
 from securelint.suppressions import COMMENT_RULE_ID
-from securelint.trivy import RULE_ID as TRIVY_RULE_ID
-from securelint.trivy import TITLE as TRIVY_TITLE
+from securelint.trivy import TITLES as TRIVY_TITLES
 
 SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
@@ -51,7 +50,7 @@ _SECURITY_SEVERITY = {
 
 _TITLES = {rule.rule_id: rule.title for rule in ALL_RULES} | {
     COMMENT_RULE_ID: "Comment that silences nothing",
-    TRIVY_RULE_ID: TRIVY_TITLE,
+    **TRIVY_TITLES,
 }
 
 

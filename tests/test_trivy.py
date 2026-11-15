@@ -182,10 +182,10 @@ def test_results_without_vulnerabilities_are_skipped(project: Path) -> None:
     assert read(project, {"SchemaVersion": 2}) == []
 
 
-def test_an_ignored_rule_reads_nothing(project: Path) -> None:
+def test_with_both_rules_ignored_nothing_is_read(project: Path) -> None:
     path = write_report(project.parent, "not even a report")
 
-    assert read_trivy_report(path, project, project, ignore={"SL201"}) == []
+    assert read_trivy_report(path, project, project, ignore={"SL201", "SL202"}) == []
 
 
 @pytest.mark.parametrize(
@@ -326,3 +326,147 @@ def test_sl201_can_be_ignored_in_the_settings(
 
     assert scan(project, "--trivy-report", str(path)) == 0
     assert "No problems found" in capsys.readouterr().out
+
+
+# Dockerfiles and other configuration files (rule SL202).
+
+DOCKERFILE = "FROM python:3.13\nRUN apt-get update\nRUN apt-get update\nCOPY . /app\n"
+
+
+def setting(line: int | None = 2, **fields: Any) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "ID": "DS017",
+        "Title": "'RUN <package-manager> update' instruction alone",
+        "Message": "The instruction 'RUN <package-manager> update' should always "
+        "be followed by '<package-manager> install' in the same RUN statement.",
+        "Resolution": "Combine '<package-manager> update' and "
+        "'<package-manager> install' instructions to single one.",
+        "Severity": "HIGH",
+        "Status": "FAIL",
+    }
+    if line is not None:
+        item["CauseMetadata"] = {"Provider": "Dockerfile", "StartLine": line}
+    return item | fields
+
+
+def settings_report(*items: dict[str, Any]) -> Any:
+    return {
+        "SchemaVersion": 2,
+        "Results": [
+            {
+                "Target": "Dockerfile",
+                "Class": "config",
+                "Type": "dockerfile",
+                "Misconfigurations": list(items),
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def docker(tmp_path: Path) -> Path:
+    (tmp_path / "Dockerfile").write_text(DOCKERFILE, encoding="utf-8")
+    return tmp_path
+
+
+def test_a_failed_check_becomes_a_finding(docker: Path) -> None:
+    (finding,) = read(docker, settings_report(setting()))
+
+    assert finding.rule_id == "SL202"
+    assert (finding.path, finding.line, finding.column) == ("Dockerfile", 2, 1)
+    assert finding.severity is Severity.HIGH
+    assert finding.confidence is Confidence.MEDIUM
+    assert finding.message == (
+        "'RUN <package-manager> update' instruction alone (DS017): The instruction "
+        "'RUN <package-manager> update' should always be followed by "
+        "'<package-manager> install' in the same RUN statement. Fix: Combine "
+        "'<package-manager> update' and '<package-manager> install' instructions "
+        "to single one."
+    )
+
+
+def test_a_check_about_the_whole_file_is_on_line_1(docker: Path) -> None:
+    item = setting(
+        line=None,
+        ID="DS002",
+        Title="Image user should not be 'root'",
+        Message="Specify at least 1 USER command in Dockerfile.",
+        Resolution="",
+    )
+
+    (finding,) = read(docker, settings_report(item))
+
+    assert finding.line == 1
+    assert finding.message == (
+        "Image user should not be 'root' (DS002): "
+        "Specify at least 1 USER command in Dockerfile."
+    )
+
+
+def test_only_failed_checks_are_problems(docker: Path) -> None:
+    items = [
+        setting(Status="PASS"),
+        setting(Status="EXCEPTION"),
+        # Without a status, the check is taken as failed, not as passed.
+        {key: value for key, value in setting(line=3).items() if key != "Status"},
+    ]
+
+    (finding,) = read(docker, settings_report(*items))
+
+    assert finding.line == 3
+
+
+def test_identical_lines_are_two_problems_that_survive_moving(docker: Path) -> None:
+    first = read(docker, settings_report(setting(2), setting(3)))
+    (docker / "Dockerfile").write_text("# app\n" + DOCKERFILE, encoding="utf-8")
+    moved = read(docker, settings_report(setting(4), setting(3)))
+
+    assert len({finding.fingerprint for finding in first}) == 2
+    assert {finding.fingerprint for finding in moved} == {
+        finding.fingerprint for finding in first
+    }
+
+
+def test_a_line_the_file_does_not_have_is_refused(docker: Path) -> None:
+    with pytest.raises(TrivyReportError, match="line 9 of Dockerfile, which has 4"):
+        read(docker, settings_report(setting(9)))
+
+
+@pytest.mark.parametrize("line", ["2", -1, True, 2.5])
+def test_a_line_that_is_not_a_number_is_refused(docker: Path, line: object) -> None:
+    item = setting() | {"CauseMetadata": {"StartLine": line}}
+
+    with pytest.raises(TrivyReportError, match="StartLine is not a line"):
+        read(docker, settings_report(item))
+
+
+def test_a_check_without_an_id_is_refused(docker: Path) -> None:
+    with pytest.raises(TrivyReportError, match="ID is missing"):
+        read(docker, settings_report(setting(ID="")))
+
+
+def test_each_rule_can_be_ignored_alone(docker: Path) -> None:
+    (docker / "requirements.txt").write_text(REQUIREMENTS, encoding="utf-8")
+    document = settings_report(setting())
+    document["Results"] += report(vulnerability())["Results"]
+    path = write_report(docker, document)
+
+    without_dependencies = read_trivy_report(path, docker, docker, ignore={"SL201"})
+    without_settings = read_trivy_report(path, docker, docker, ignore={"SL202"})
+
+    assert [finding.rule_id for finding in without_dependencies] == ["SL202"]
+    assert [finding.rule_id for finding in without_settings] == ["SL201"]
+
+
+def test_sarif_names_the_dockerfile_rule(
+    docker: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = write_report(docker.parent, settings_report(setting()))
+
+    assert scan(docker, "--trivy-report", str(path), "--format", "sarif") == 1
+
+    rules = json.loads(capsys.readouterr().out)["runs"][0]["tool"]["driver"]["rules"]
+    assert rules[0]["id"] == "SL202"
+    assert rules[0]["shortDescription"]["text"] == (
+        "Unsafe setting in a Dockerfile or configuration file"
+    )

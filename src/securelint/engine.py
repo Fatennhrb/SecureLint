@@ -84,6 +84,11 @@ class ScanResult:
     """Findings on lines that the change being checked did not touch (see
     ``securelint.changes``). A scan itself leaves this empty."""
 
+    explanations: tuple[tuple[Finding, str], ...] = ()
+    """Explanations written by an AI for some of the findings and warnings
+    (see ``securelint.explain``). They are shown next to the finding and
+    change nothing else. A scan itself leaves this empty."""
+
 
 def scan(
     target: Path,

@@ -2,6 +2,14 @@
 
 What changed in each version of SecureLint, newest first.
 
+## Unreleased
+
+- `scan --explain` adds a short explanation, written by an AI, under each
+  finding shown (at most 10), in the text and JSON reports. It is added
+  after the policy has decided, so it never changes what blocks or the exit
+  code, and an explanation that fails is only skipped. No AI provider can be
+  set up yet: for now the option only says so.
+
 ## 0.5.0 (2026-11-15)
 
 Dependencies and Dockerfiles: Trivy's findings go through the same gate as

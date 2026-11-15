@@ -8,6 +8,10 @@ from securelint import __version__
 from securelint.engine import ScanResult
 from securelint.model import Finding, Severity
 
+AI_LABEL = "AI explanation (may be wrong)"
+"""Put before every explanation: it was written by an AI, not checked by
+SecureLint, and must not be read as part of the finding."""
+
 JSON_FORMAT_VERSION = 1
 """Raised when the JSON report changes in a way that could break a program
 reading it (a field removed or renamed). Adding a field does not count."""
@@ -25,12 +29,16 @@ def format_text(result: ScanResult) -> str:
     marked = [(finding, "") for finding in result.findings]
     marked += [(finding, "(warning) ") for finding in result.warnings]
     marked.sort(key=lambda item: _position(item[0]))
-    lines = [
-        f"{finding.path}:{finding.line}:{finding.column}"
-        f"  {finding.severity.name.lower():<8}"
-        f"  {finding.rule_id}  {mark}{finding.message}"
-        for finding, mark in marked
-    ]
+    explanations = dict(result.explanations)
+    lines = []
+    for finding, mark in marked:
+        lines.append(
+            f"{finding.path}:{finding.line}:{finding.column}"
+            f"  {finding.severity.name.lower():<8}"
+            f"  {finding.rule_id}  {mark}{finding.message}"
+        )
+        if finding in explanations:
+            lines.append(f"    {AI_LABEL}: {explanations[finding]}")
     if lines:
         lines.append("")
     lines.append(summary_line(result))
@@ -45,6 +53,7 @@ def format_json(result: ScanResult) -> str:
     reading it never has to parse sentences.
     """
     counts = Counter(finding.severity for finding in result.findings)
+    explanations = dict(result.explanations)
     document: dict[str, Any] = {
         "format_version": JSON_FORMAT_VERSION,
         "tool": {"name": "securelint", "version": __version__},
@@ -64,9 +73,13 @@ def format_json(result: ScanResult) -> str:
             "outside_change": len(result.outside_change),
         },
         # The findings that block. Without a policy, that is all of them.
-        "findings": [_finding_fields(finding) for finding in result.findings],
+        "findings": [
+            _explained_fields(finding, explanations) for finding in result.findings
+        ],
         # Findings that the project's policy reports without blocking.
-        "warnings": [_finding_fields(finding) for finding in result.warnings],
+        "warnings": [
+            _explained_fields(finding, explanations) for finding in result.warnings
+        ],
         # Findings hidden by a comment in the code, with the reason given.
         "silenced": [
             {**_finding_fields(item.finding), "reason": item.reason}
@@ -90,6 +103,13 @@ def format_json(result: ScanResult) -> str:
     # Characters outside ASCII are written as \u escapes (the default), so
     # the report prints on any terminal whatever its encoding.
     return json.dumps(document, indent=2)
+
+
+def _explained_fields(
+    finding: Finding, explanations: dict[Finding, str]
+) -> dict[str, Any]:
+    # null when there is none, so a reader can always look the field up.
+    return {**_finding_fields(finding), "explanation": explanations.get(finding)}
 
 
 def _finding_fields(finding: Finding) -> dict[str, Any]:

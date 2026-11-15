@@ -24,6 +24,7 @@ from securelint.changes import (
 )
 from securelint.config import Config, ConfigError, load_config
 from securelint.engine import Rule, ScanResult, scan
+from securelint.explain import Explainer, add_explanations
 from securelint.github_report import format_github, format_step_summary
 from securelint.html_report import format_html
 from securelint.model import Finding
@@ -99,6 +100,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="report every finding, including those listed in the baseline file",
     )
     scan_parser.add_argument(
+        "--explain",
+        action="store_true",
+        help=(
+            "add a short explanation, written by the project's AI provider, "
+            "to the findings shown (never changes the result)"
+        ),
+    )
+    scan_parser.add_argument(
         "--changed-since",
         metavar="BRANCH",
         help=(
@@ -157,6 +166,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             use_baseline=not args.no_baseline,
             changed_since=args.changed_since,
             trivy_report=args.trivy_report,
+            explain=args.explain,
         )
     if args.command == "baseline":
         return _run_baseline(args.path, args.trivy_report)
@@ -184,6 +194,7 @@ def _run_scan(
     use_baseline: bool,
     changed_since: str | None = None,
     trivy_report: Path | None = None,
+    explain: bool = False,
 ) -> int:
     project = _find_project(target)
     if project is None:
@@ -221,6 +232,9 @@ def _run_scan(
     # Last of all: the policy only sorts what is left into "blocks" and
     # "warning". Known problems are neither.
     result = apply_policy(result, project.config.policy)
+    # Only after the decision: an explanation can never change it.
+    if explain:
+        result = _explain(result, project.config)
 
     # The report goes to standard output; everything about the scan itself
     # goes to standard error, so `securelint scan > report.txt` stays clean.
@@ -334,6 +348,25 @@ def _scan_project(
         findings=tuple(findings),
         files_scanned=result.files_scanned + checked_by_trivy,
     )
+
+
+def make_explainer(config: Config) -> Explainer | None:
+    """Return the explainer the project's settings ask for; None if none.
+
+    No AI provider can be set up yet, so this always returns None.
+    """
+    return None
+
+
+def _explain(result: ScanResult, config: Config) -> ScanResult:
+    explainer = make_explainer(config)
+    if explainer is None:
+        _print_error("no AI provider is set up yet; no explanations were added")
+        return result
+    result, problems = add_explanations(result, explainer)
+    for problem in problems:
+        _print_error(problem)
+    return result
 
 
 def _write_step_summary(result: ScanResult) -> None:

@@ -44,6 +44,7 @@ securelint scan app.py       # scan one file
 securelint scan src/ --format json > report.json
 securelint scan src/ --format html > report.html
 securelint scan --format sarif > securelint.sarif
+securelint scan --format github   # inside GitHub Actions
 ```
 
 `--format json` writes the same result as a JSON document for other programs
@@ -73,6 +74,16 @@ written, with a level that follows the policy:
 
 Paths are written from the top of the project, whatever folder was scanned,
 and each result carries its fingerprint so GitHub can follow it between scans.
+
+`--format github` is meant for GitHub Actions. Each blocking finding is printed
+as an error note and each warning as a warning note, in the form GitHub reads
+by itself: they appear on the exact line of the pull request, without any
+upload or extra permission. Known, silenced and out-of-change findings are only
+counted. When GitHub gives a summary file (`GITHUB_STEP_SUMMARY`), SecureLint
+also adds a table to the job's page with the verdict: passed, blocked or
+incomplete. File names and messages are escaped, so a strange name cannot break
+a note or create a fake one. GitHub limits how many notes it shows for one
+step, so on a large project use SARIF as well.
 
 The exit code tells a script or a CI job what happened:
 

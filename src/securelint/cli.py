@@ -1,6 +1,7 @@
 """Command-line interface for SecureLint."""
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from securelint.changes import (
 )
 from securelint.config import Config, ConfigError, load_config
 from securelint.engine import Rule, ScanResult, scan
+from securelint.github_report import format_github, format_step_summary
 from securelint.html_report import format_html
 from securelint.policy import apply_policy
 from securelint.report import format_json, format_text
@@ -35,6 +37,7 @@ FORMATS = {
     "json": format_json,
     "html": format_html,
     "sarif": format_sarif,
+    "github": format_github,
 }
 
 # Exit codes are how a CI job reads the result, so they are part of the
@@ -200,6 +203,8 @@ def _run_scan(
     # goes to standard error, so `securelint scan > report.txt` stays clean.
     print(FORMATS[report_format](result))
     _print_failures(result)
+    if report_format == "github":
+        _write_step_summary(result)
 
     # Whether a known problem was fixed can only be told when the whole
     # project was scanned: after a scan of one folder, the known problems
@@ -276,6 +281,24 @@ def _scan_project(target: Path, project: _Project) -> ScanResult | None:
         # The target does not exist, or a directory cannot be opened.
         _print_error(f"error: {error}")
         return None
+
+
+def _write_step_summary(result: ScanResult) -> None:
+    """Add a summary to the job's result page, when GitHub Actions gives one.
+
+    GitHub names the file in the GITHUB_STEP_SUMMARY variable. Outside
+    GitHub Actions there is none, and nothing is written.
+    """
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with Path(path).open("a", encoding="utf-8") as summary:
+            summary.write(format_step_summary(result))
+    except OSError as error:
+        # The report itself was printed; a missing summary does not change
+        # the result, so it does not change the exit code either.
+        _print_error(f"cannot write the job summary: {error}")
 
 
 def _print_failures(result: ScanResult) -> None:

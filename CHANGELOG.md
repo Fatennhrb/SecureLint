@@ -10,6 +10,8 @@ What changed in each version of SecureLint, newest first.
 - `--changed-since BRANCH` reports only findings on lines the current
   branch added or changed since it left BRANCH, asking Git for those
   lines. Findings elsewhere are counted and listed, not reported.
+- `--format github` prints findings as notes GitHub Actions shows on the
+  lines of a pull request, and adds a summary table to the job's page.
 
 ## 0.3.0 (2026-11-14)
 

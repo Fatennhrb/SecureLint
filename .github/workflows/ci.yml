@@ -53,3 +53,20 @@ jobs:
 
       - name: Run tests
         run: python -m pytest
+
+  securelint:
+    # SecureLint checks its own code with its own Action, the way another
+    # project would use it. "./" is the Action in this commit, so a change to
+    # action.yml is tested by the same pull request.
+    name: SecureLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the whole history, to find the changed lines
+          persist-credentials: false
+
+      - name: Scan with SecureLint
+        uses: ./

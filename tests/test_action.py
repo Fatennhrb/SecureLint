@@ -78,6 +78,19 @@ def test_every_action_used_is_pinned_to_a_commit() -> None:
         assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", reference), reference
 
 
+def test_ci_runs_the_action_and_pins_every_other_action() -> None:
+    workflow = ACTION.parent / ".github" / "workflows" / "ci.yml"
+    uses = re.findall(
+        r"^\s*(?:- )?uses:\s*(\S+)", workflow.read_text(encoding="utf-8"), re.MULTILINE
+    )
+
+    # "./" is the Action in the same commit, so it needs no pin.
+    assert "./" in uses
+    for reference in uses:
+        if reference != "./":
+            assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-f]{40}", reference), reference
+
+
 def test_the_actions_python_does_not_replace_the_jobs_python() -> None:
     text = ACTION.read_text(encoding="utf-8")
 

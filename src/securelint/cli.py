@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from securelint import __version__
@@ -26,10 +26,13 @@ from securelint.config import Config, ConfigError, load_config
 from securelint.engine import Rule, ScanResult, scan
 from securelint.github_report import format_github, format_step_summary
 from securelint.html_report import format_html
+from securelint.model import Finding
 from securelint.policy import apply_policy
 from securelint.report import format_json, format_text
 from securelint.rules import ALL_RULES
 from securelint.sarif_report import format_sarif
+from securelint.trivy import RULE_ID as TRIVY_RULE_ID
+from securelint.trivy import TrivyReportError, read_trivy_report
 
 # The report formats `scan --format` accepts, and the function behind each.
 FORMATS = {
@@ -103,6 +106,15 @@ def build_parser() -> argparse.ArgumentParser:
             "left BRANCH (for example: main)"
         ),
     )
+    scan_parser.add_argument(
+        "--trivy-report",
+        metavar="FILE",
+        type=Path,
+        help=(
+            "also report the vulnerable dependencies in this Trivy JSON report "
+            "(from `trivy fs --format json` on the same folder)"
+        ),
+    )
     baseline_parser = commands.add_parser(
         "baseline",
         help="record today's findings as known",
@@ -117,6 +129,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(),
         help="any place inside the project (default: the current directory)",
+    )
+    baseline_parser.add_argument(
+        "--trivy-report",
+        metavar="FILE",
+        type=Path,
+        help=(
+            "also report the vulnerable dependencies in this Trivy JSON report "
+            "(from `trivy fs --format json` on the top of the project)"
+        ),
     )
     return parser
 
@@ -135,9 +156,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.format,
             use_baseline=not args.no_baseline,
             changed_since=args.changed_since,
+            trivy_report=args.trivy_report,
         )
     if args.command == "baseline":
-        return _run_baseline(args.path)
+        return _run_baseline(args.path, args.trivy_report)
     parser.print_help()
     return EXIT_CLEAN
 
@@ -161,6 +183,7 @@ def _run_scan(
     *,
     use_baseline: bool,
     changed_since: str | None = None,
+    trivy_report: Path | None = None,
 ) -> int:
     project = _find_project(target)
     if project is None:
@@ -178,7 +201,7 @@ def _run_scan(
         if known is not None:
             _print_error(f"using baseline {project.baseline_path}")
 
-    result = _scan_project(target, project)
+    result = _scan_project(target, project, trivy_report)
     if result is None:
         return EXIT_ERROR
     if known is not None:
@@ -225,7 +248,7 @@ def _run_scan(
     return EXIT_FINDINGS if result.findings else EXIT_CLEAN
 
 
-def _run_baseline(place: Path) -> int:
+def _run_baseline(place: Path, trivy_report: Path | None = None) -> int:
     project = _find_project(place)
     if project is None:
         return EXIT_ERROR
@@ -236,7 +259,7 @@ def _run_baseline(place: Path) -> int:
     # Always the whole project, wherever the command was started: a
     # baseline written from one folder would drop the known problems of
     # all the others.
-    result = _scan_project(project.root, project)
+    result = _scan_project(project.root, project, trivy_report)
     if result is None:
         return EXIT_ERROR
     _print_failures(result)
@@ -258,7 +281,7 @@ def _run_baseline(place: Path) -> int:
 def _find_project(target: Path) -> _Project | None:
     """Read the settings and find the top of the project; None after an error."""
     try:
-        config = load_config(target, [rule.rule_id for rule in RULES])
+        config = load_config(target, [*(rule.rule_id for rule in RULES), TRIVY_RULE_ID])
     except ConfigError as error:
         # Settings that cannot be trusted stop the scan: guessing what
         # they meant could leave out files the user wanted checked.
@@ -271,16 +294,38 @@ def _find_project(target: Path) -> _Project | None:
     return _Project(config, find_project_root(target))
 
 
-def _scan_project(target: Path, project: _Project) -> ScanResult | None:
-    """Scan ``target`` with the project's settings; None after an error."""
+def _scan_project(
+    target: Path, project: _Project, trivy_report: Path | None = None
+) -> ScanResult | None:
+    """Scan ``target`` with the project's settings; None after an error.
+
+    With ``trivy_report``, the dependency problems Trivy found in the same
+    folder are added to the code's findings.
+    """
     config = project.config
     rules = [rule for rule in RULES if rule.rule_id not in config.ignore]
     try:
-        return scan(target, rules, config.exclude, project.root)
+        result = scan(target, rules, config.exclude, project.root)
     except OSError as error:
         # The target does not exist, or a directory cannot be opened.
         _print_error(f"error: {error}")
         return None
+    if trivy_report is None:
+        return result
+    if not target.is_dir():
+        _print_error("error: --trivy-report needs a folder to scan, not a file")
+        return None
+    try:
+        dependencies = read_trivy_report(
+            trivy_report, target, project.root, config.ignore
+        )
+    except TrivyReportError as error:
+        # A report that cannot be read is not a report without problems.
+        _print_error(f"error: {error}")
+        return None
+    _print_error(f"using Trivy report {trivy_report}")
+    findings = sorted([*result.findings, *dependencies], key=_sort_key)
+    return replace(result, findings=tuple(findings))
 
 
 def _write_step_summary(result: ScanResult) -> None:
@@ -307,6 +352,10 @@ def _print_failures(result: ScanResult) -> None:
         if failure.line is not None:
             place += f":{failure.line}"
         _print_error(f"cannot scan {place}: {failure.message}")
+
+
+def _sort_key(finding: Finding) -> tuple[str, int, int, str]:
+    return (finding.path, finding.line, finding.column, finding.rule_id)
 
 
 def _print_error(message: str) -> None:

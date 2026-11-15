@@ -2,6 +2,14 @@
 
 What changed in each version of SecureLint, newest first.
 
+## Unreleased
+
+- `--trivy-report FILE` adds the vulnerable dependencies found by Trivy
+  (`trivy fs --format json`) to the scan, as findings of rule `SL201` on the
+  line that names the package. They go through the baseline, the policy and
+  every report like the other findings. SecureLint reads the report; it does
+  not run Trivy.
+
 ## 0.4.0 (2026-11-15)
 
 GitHub integration: findings appear on the lines a pull request changed.

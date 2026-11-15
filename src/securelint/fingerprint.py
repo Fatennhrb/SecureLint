@@ -76,6 +76,16 @@ def add_fingerprints(
     ]
 
 
+def fingerprint_for(rule_id: str, path: str, text: bytes) -> str:
+    """Return the fingerprint of a finding that is not tied to a line of code.
+
+    For findings read from another tool (a vulnerable dependency, for
+    example), ``text`` holds what identifies the problem instead of the
+    line's text.
+    """
+    return _hash(rule_id, path, text, 0)
+
+
 def _hash(rule_id: str, path: str, text: bytes, occurrence: int) -> str:
     # The parts are separated by a byte that cannot appear in a rule id, a
     # path or a line of code, so two different findings can never be glued

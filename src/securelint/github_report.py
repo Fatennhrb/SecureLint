@@ -22,13 +22,20 @@ from collections import Counter
 
 from securelint.engine import ScanResult
 from securelint.model import Finding, Severity
-from securelint.report import summary_line
+from securelint.report import AI_LABEL, summary_line
 
 
 def format_github(result: ScanResult) -> str:
     """Return one GitHub note per finding to show, then the summary line."""
-    lines = [_note("error", finding, result.base) for finding in result.findings]
-    lines += [_note("warning", finding, result.base) for finding in result.warnings]
+    explanations = dict(result.explanations)
+    lines = [
+        _note("error", finding, result.base, explanations.get(finding))
+        for finding in result.findings
+    ]
+    lines += [
+        _note("warning", finding, result.base, explanations.get(finding))
+        for finding in result.warnings
+    ]
     for failure in result.failures:
         properties = f"file={_property(_from_top(result.base, failure.relative_path))}"
         if failure.line is not None:
@@ -76,7 +83,7 @@ def format_step_summary(result: ScanResult) -> str:
     return "\n".join(["## SecureLint", "", verdict, "", *table, ""])
 
 
-def _note(level: str, finding: Finding, base: str) -> str:
+def _note(level: str, finding: Finding, base: str, explanation: str | None) -> str:
     title = (
         f"{finding.rule_id} ({finding.severity.name.lower()}, "
         f"confidence {finding.confidence.name.lower()})"
@@ -89,7 +96,12 @@ def _note(level: str, finding: Finding, base: str) -> str:
             f"title={_property(title)}",
         ]
     )
-    return f"::{level} {properties}::{_data(finding.message)}"
+    message = finding.message
+    if explanation is not None:
+        # Below the finding, labelled; escaped with it, so it cannot end the
+        # note or start a new one.
+        message += f"\n\n{AI_LABEL}: {explanation}"
+    return f"::{level} {properties}::{_data(message)}"
 
 
 def _data(text: str) -> str:

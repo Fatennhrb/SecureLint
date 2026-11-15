@@ -14,6 +14,11 @@ What changed in each version of SecureLint, newest first.
   line of a hard-coded secret, the value of any name that sounds secret, and
   text shaped like a well-known key are replaced by `***`. Lines are cut at
   200 characters.
+- The AI must answer with a JSON object holding an `explanation` and,
+  optionally, a `fix`; any other answer is dropped. Control characters are
+  removed and long answers are cut. Explanations are shown, labelled "AI
+  explanation (may be wrong)", in the text, JSON and HTML reports and in the
+  GitHub notes, never in the job summary.
 
 ## 0.5.0 (2026-11-15)
 

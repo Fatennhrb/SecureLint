@@ -22,10 +22,12 @@ CODE = 'os.system("ping " + input())\nDB_PASSWORD = "hunter2"\n'
 
 
 class FakeExplainer:
-    """Answers from a fixed text, and remembers what it was asked."""
+    """Answers like a real AI, in the JSON format the prompt asks for, and
+    remembers what it was asked. ``{rule}`` in the explanation becomes the
+    rule asked about."""
 
-    def __init__(self, answer: str = "Because {rule}.", fail_on: str = "") -> None:
-        self.answer = answer
+    def __init__(self, explanation: str = "Because {rule}.", fail_on: str = "") -> None:
+        self.explanation = explanation
         self.fail_on = fail_on
         self.asked: list[Prompt] = []
 
@@ -34,7 +36,7 @@ class FakeExplainer:
         rule = prompt.user.splitlines()[0].removeprefix("Rule: ")
         if rule == self.fail_on:
             raise TimeoutError("the AI took too long")
-        return self.answer.format(rule=rule)
+        return json.dumps({"explanation": self.explanation.replace("{rule}", rule)})
 
 
 def no_lines(path: str) -> tuple[str, ...]:

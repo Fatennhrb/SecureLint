@@ -12,11 +12,13 @@ nothing here can change that decision: an explainer that fails, answers
 nonsense or takes too long costs an explanation, never a different result.
 """
 
+import json
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from functools import cache
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from securelint.engine import ScanResult
 from securelint.model import Finding
@@ -26,8 +28,18 @@ MAX_EXPLAINED = 10
 """Findings explained in one scan at most. Each explanation can cost money
 and time, and a long list of explanations is not read anyway."""
 
+MAX_EXPLANATION = 600
+"""Characters kept from the explanation the AI gives."""
+
+MAX_FIX = 400
+"""Characters kept from the fix the AI suggests."""
+
 LineReader = Callable[[str], Sequence[str]]
 """Returns the lines of a file, from its path as shown in the findings."""
+
+
+class AnswerError(ValueError):
+    """The AI's answer is not in the format it was asked for."""
 
 
 class Explainer(Protocol):
@@ -60,15 +72,12 @@ def add_explanations(
     for finding in wanted[:limit]:
         try:
             answer = explainer.explain(build_prompt(finding, read_lines(finding.path)))
+            explained.append((finding, parse_answer(answer)))
         except Exception as error:
             # Any failure, whatever its kind, costs this one explanation and
             # nothing more: the scan's result is already decided.
             place = f"{finding.path}:{finding.line}"
             problems.append(f"cannot explain {finding.rule_id} at {place}: {error}")
-            continue
-        text = " ".join(str(answer).split())
-        if text:
-            explained.append((finding, text))
     if len(wanted) > limit:
         problems.append(
             f"explained the first {limit} of {len(wanted)} findings; "
@@ -93,3 +102,53 @@ def file_lines(folder: Path) -> LineReader:
         return tuple(text.splitlines())
 
     return read
+
+
+def parse_answer(answer: object) -> str:
+    """Return the explanation in the AI's answer, as one line of plain text.
+
+    The answer must be the JSON object the prompt asks for, with a
+    non-empty ``"explanation"`` and, if there is one, a ``"fix"``, both
+    text. Anything else raises ``AnswerError``: an answer that does not
+    follow the format cannot be trusted to follow the rest of the prompt
+    either. A code block around the JSON is accepted, since models often
+    add one.
+
+    Control characters are removed, so an answer cannot move the cursor
+    of a terminal, change its colours, or turn text around unseen.
+    """
+    if not isinstance(answer, str):
+        raise AnswerError("the answer is not text")
+    text = answer.strip()
+    lines = text.splitlines()
+    if len(lines) >= 2 and lines[0].startswith("```") and lines[-1].strip() == "```":
+        text = "\n".join(lines[1:-1])
+    try:
+        document = json.loads(text)
+    except json.JSONDecodeError:
+        raise AnswerError("the answer is not the JSON that was asked for") from None
+    if not isinstance(document, dict):
+        raise AnswerError("the answer is not a JSON object")
+
+    explanation = _field(document, "explanation", MAX_EXPLANATION)
+    if not explanation:
+        raise AnswerError('the answer has no "explanation"')
+    fix = _field(document, "fix", MAX_FIX)
+    return f"{explanation} Fix: {fix}" if fix else explanation
+
+
+def _field(document: dict[str, Any], key: str, limit: int) -> str:
+    value = document.get(key)
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise AnswerError(f'"{key}" in the answer is not text')
+    # Unicode categories starting with "C" are control and format
+    # characters: escape codes, invisible marks, text-direction overrides.
+    visible = "".join(
+        " " if unicodedata.category(char).startswith("C") else char for char in value
+    )
+    text = " ".join(visible.split())
+    if len(text) > limit:
+        text = text[: limit - 3] + "..."
+    return text

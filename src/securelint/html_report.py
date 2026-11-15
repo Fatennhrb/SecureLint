@@ -16,7 +16,7 @@ from securelint import __version__
 from securelint.engine import ScanResult
 from securelint.model import Finding, Severity
 from securelint.parsing import ParseFailure
-from securelint.report import summary_line
+from securelint.report import AI_LABEL, summary_line
 from securelint.suppressions import Silenced
 
 # Forbids scripts, images, fonts and network requests; only the style
@@ -94,6 +94,9 @@ ol, ul { margin: 0; padding: 0; list-style: none; }
 .badge.low { color: var(--low); }
 .rule { font-weight: 700; font-family: ui-monospace, Consolas, monospace; }
 .finding p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.finding p.ai {
+  padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted);
+}
 .failure { padding: 10px 14px; overflow-wrap: anywhere; }
 footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
 """
@@ -101,6 +104,7 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
 
 def format_html(result: ScanResult) -> str:
     """Return the scan result as one complete HTML page."""
+    explanations = dict(result.explanations)
     parts = [
         "<!DOCTYPE html>",
         '<html lang="en">',
@@ -120,8 +124,8 @@ def format_html(result: ScanResult) -> str:
         "</header>",
         *_status(result),
         *_cards(result),
-        *_findings(result.findings, "Problems"),
-        *_findings(result.warnings, "Warnings"),
+        *_findings(result.findings, "Problems", explanations),
+        *_findings(result.warnings, "Warnings", explanations),
         *_silenced(result.silenced),
         *_known(result.known),
         *_outside(result.outside_change),
@@ -181,7 +185,9 @@ def _card(kind: str, number: int, label: str) -> str:
     )
 
 
-def _findings(findings: tuple[Finding, ...], title: str) -> list[str]:
+def _findings(
+    findings: tuple[Finding, ...], title: str, explanations: dict[Finding, str]
+) -> list[str]:
     """List findings under ``title``, grouped by file; nothing when empty."""
     if not findings:
         return []
@@ -193,14 +199,14 @@ def _findings(findings: tuple[Finding, ...], title: str) -> list[str]:
             '<section class="file">',
             f'<h3>{_text(path)} <span class="count">({len(in_file)})</span></h3>',
             "<ol>",
-            *(_finding(finding) for finding in in_file),
+            *(_finding(finding, explanations.get(finding)) for finding in in_file),
             "</ol>",
             "</section>",
         ]
     return lines
 
 
-def _finding(finding: Finding) -> str:
+def _finding(finding: Finding, explanation: str | None) -> str:
     severity = finding.severity.name.lower()
     confidence = finding.confidence.name.lower()
     return (
@@ -212,8 +218,17 @@ def _finding(finding: Finding) -> str:
         f'<span class="confidence">confidence: {confidence}</span>'
         "</div>"
         f"<p>{_text(finding.message)}</p>"
+        f"{_explanation(explanation)}"
         "</li>"
     )
+
+
+def _explanation(explanation: str | None) -> str:
+    if explanation is None:
+        return ""
+    # Written by an AI: escaped like everything else, and labelled.
+    label = f"<strong>{_text(AI_LABEL)}:</strong>"
+    return f'<p class="ai">{label} {_text(explanation)}</p>'
 
 
 def _silenced(silenced: tuple[Silenced, ...]) -> list[str]:

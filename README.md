@@ -195,6 +195,53 @@ matched by its fingerprint. Editing the reported line makes it new again.
 
 `securelint scan --no-baseline` shows everything, known or not.
 
+## Using SecureLint in GitHub Actions
+
+The repository is also a GitHub Action. Add this workflow to a project, as
+`.github/workflows/securelint.yml`:
+
+```yaml
+name: SecureLint
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  securelint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the whole history, to find the changed lines
+          persist-credentials: false
+      - uses: Fatennhrb/SecureLint@v0.4.0 # from version 0.4.0; pin the commit
+```
+
+On a pull request, SecureLint reports the findings on the lines the pull
+request changed, as notes on those lines, adds a summary table to the job's
+page, and fails the check when the project's policy says something blocks. On
+a push, it scans everything. It needs no token and no write permission.
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `path` | `.` | File or directory to scan. |
+| `changed-only` | `true` | On a pull request, report only the changed lines. |
+| `sarif-file` | (empty) | Also write a SARIF report of the whole scan to this file. |
+| `python-version` | `3.13` | Python used to run SecureLint. The job's own Python is not changed. |
+
+To see the findings in the repository's Security tab as well, set
+`sarif-file: securelint.sarif`, give the job the `security-events: write`
+permission, and upload the file with the `upload-sarif` step of
+`github/codeql-action`, pinned to a commit like the steps above. GitHub does
+not let pull requests from forks upload SARIF; the notes on the lines still
+work for them.
+
+The Action installs SecureLint from its own files, so `@v0.4.0` always runs
+SecureLint 0.4.0. Settings, silencing comments, the baseline and the policy
+are read from the scanned project as usual.
+
 ## Checking only what a change touched
 
 ```bash

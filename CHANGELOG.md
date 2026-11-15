@@ -12,6 +12,9 @@ What changed in each version of SecureLint, newest first.
   lines. Findings elsewhere are counted and listed, not reported.
 - `--format github` prints findings as notes GitHub Actions shows on the
   lines of a pull request, and adds a summary table to the job's page.
+- The repository is a GitHub Action (`action.yml`): on a pull request it
+  reports the findings on the changed lines and fails when something
+  blocks. It needs no token and no write permission.
 
 ## 0.3.0 (2026-11-14)
 

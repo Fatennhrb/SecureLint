@@ -1,0 +1,105 @@
+# SecureLint as a GitHub Action.
+#
+#   - uses: Fatennhrb/SecureLint@<version>
+#
+# On a pull request it reports the findings on the lines the pull request
+# changed, as notes on those lines, and fails when the project's policy says
+# something blocks. On any other event it scans everything.
+#
+# Security rules followed in this file:
+#   - Values that come from outside (inputs, branch names) are passed to the
+#     scripts as environment variables, never written into a script with
+#     ${{ }}: a crafted value could otherwise run its own commands.
+#   - Every action used is pinned to a full commit, not a tag that can move.
+#   - No token and no write permission are needed.
+
+name: SecureLint
+description: Find security problems in Python code and report them on pull requests.
+author: Faten Harbaoui
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  path:
+    description: File or directory to scan, relative to the repository.
+    required: false
+    default: "."
+  changed-only:
+    description: >-
+      On a pull request, report only the findings on lines it changed
+      ("true" or "false"). Needs the whole history (fetch-depth: 0).
+    required: false
+    default: "true"
+  sarif-file:
+    description: >-
+      Also write a SARIF report of the whole scan to this file, for example to
+      upload it to the Security tab. Leave empty to skip.
+    required: false
+    default: ""
+  python-version:
+    description: Python version used to run SecureLint (3.11 or newer).
+    required: false
+    default: "3.13"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python for SecureLint
+      id: python
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      with:
+        python-version: ${{ inputs.python-version }}
+        # SecureLint's own Python; the job's Python is left as it was.
+        update-environment: false
+
+    - name: Install SecureLint
+      shell: bash
+      env:
+        PYTHON: ${{ steps.python.outputs.python-path }}
+        # The Action's own files: the same version as the one asked for.
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        "$PYTHON" -m pip install --disable-pip-version-check --no-input --quiet "$ACTION_PATH"
+
+    - name: Scan with SecureLint
+      shell: bash
+      env:
+        PYTHON: ${{ steps.python.outputs.python-path }}
+        SCAN_PATH: ${{ inputs.path }}
+        CHANGED_ONLY: ${{ inputs.changed-only }}
+        SARIF_FILE: ${{ inputs.sarif-file }}
+        # Set only on pull requests: the branch the pull request goes into.
+        BASE_REF: ${{ github.base_ref }}
+      run: |
+        set -u
+        case "$CHANGED_ONLY" in
+          true | false) ;;
+          *)
+            echo "::error::SecureLint: changed-only must be \"true\" or \"false\""
+            exit 2
+            ;;
+        esac
+
+        options=(--format github)
+        if [ "$CHANGED_ONLY" = "true" ] && [ -n "$BASE_REF" ]; then
+          options+=(--changed-since "origin/$BASE_REF")
+        fi
+
+        # "--" ends the options, so a path starting with "-" is still a path.
+        status=0
+        "$PYTHON" -m securelint scan "${options[@]}" -- "$SCAN_PATH" || status=$?
+
+        if [ -n "$SARIF_FILE" ]; then
+          # The whole scan, not only the changed lines: GitHub compares the
+          # results of two uploads itself.
+          sarif_status=0
+          "$PYTHON" -m securelint scan --format sarif -- "$SCAN_PATH" > "$SARIF_FILE" || sarif_status=$?
+          if [ "$sarif_status" -ge 2 ] && [ "$status" -lt 2 ]; then
+            echo "::error::SecureLint could not complete the scan for the SARIF report"
+            status=2
+          fi
+        fi
+
+        # 0: nothing blocks. 1: something blocks. 2: the scan could not be completed.
+        exit "$status"

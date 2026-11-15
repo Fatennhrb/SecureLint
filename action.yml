@@ -48,6 +48,14 @@ inputs:
       it runs. Linux runners only.
     required: false
     default: "false"
+  explain:
+    description: >-
+      Add a short explanation written by the project's AI provider, set up in
+      [tool.securelint.ai], to the findings shown ("true" or "false"). The key
+      is read from the environment variable the settings name: give it to
+      this step with env, from a secret. It never changes the result.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -66,8 +74,15 @@ runs:
         PYTHON: ${{ steps.python.outputs.python-path }}
         # The Action's own files: the same version as the one asked for.
         ACTION_PATH: ${{ github.action_path }}
+        EXPLAIN: ${{ inputs.explain }}
       run: |
-        "$PYTHON" -m pip install --disable-pip-version-check --no-input --quiet "$ACTION_PATH"
+        package="$ACTION_PATH"
+        if [ "$EXPLAIN" = "true" ]; then
+          # Anthropic's package, for the "anthropic" provider. Only installed
+          # when explanations are asked for.
+          package="$ACTION_PATH[anthropic]"
+        fi
+        "$PYTHON" -m pip install --disable-pip-version-check --no-input --quiet "$package"
 
     - name: Install Trivy
       if: inputs.trivy == 'true'
@@ -132,6 +147,7 @@ runs:
         CHANGED_ONLY: ${{ inputs.changed-only }}
         SARIF_FILE: ${{ inputs.sarif-file }}
         TRIVY: ${{ inputs.trivy }}
+        EXPLAIN: ${{ inputs.explain }}
         # Set only on pull requests: the branch the pull request goes into.
         BASE_REF: ${{ github.base_ref }}
       run: |
@@ -152,9 +168,22 @@ runs:
             ;;
         esac
 
+        case "$EXPLAIN" in
+          true | false) ;;
+          *)
+            echo "::error::SecureLint: explain must be \"true\" or \"false\""
+            exit 2
+            ;;
+        esac
+
         options=(--format github "${report[@]}")
         if [ "$CHANGED_ONLY" = "true" ] && [ -n "$BASE_REF" ]; then
           options+=(--changed-since "origin/$BASE_REF")
+        fi
+        # Only for the notes: the SARIF scan below never asks the AI, so
+        # nothing is explained (and paid for) twice.
+        if [ "$EXPLAIN" = "true" ]; then
+          options+=(--explain)
         fi
 
         # "--" ends the options, so a path starting with "-" is still a path.

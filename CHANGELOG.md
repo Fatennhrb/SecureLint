@@ -18,6 +18,10 @@ What changed in each version of SecureLint, newest first.
 - Explanations are kept in `.securelint-cache/` (never committed, no code in
   it), so the same finding with the same lines around it is not sent to the
   AI again. A damaged or unwritable cache is reported and changes nothing.
+- The Action's `explain` input adds the explanations to the notes on a pull
+  request; the key comes from a repository secret given to the step. Only
+  the notes are explained, not the SARIF report, and pull requests from
+  forks, which get no secrets, are checked as usual without explanations.
 - What is sent to explain a finding is the finding and the 3 lines before
   and after it, never the whole file. Before it leaves, every string on the
   line of a hard-coded secret, the value of any name that sounds secret, and

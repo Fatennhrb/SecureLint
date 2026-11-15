@@ -241,6 +241,7 @@ known vulnerabilities in an old `requests`.
 | `sarif-file` | (empty) | Also write a SARIF report of the whole scan to this file. |
 | `python-version` | `3.13` | Python used to run SecureLint. The job's own Python is not changed. |
 | `trivy` | `false` | Also check dependencies and Dockerfiles with Trivy (Linux runners only). |
+| `explain` | `false` | Add an AI explanation to the notes, from the project's `[tool.securelint.ai]` settings. |
 
 To see the findings in the repository's Security tab as well, set
 `sarif-file: securelint.sarif`, give the job the `security-events: write`
@@ -257,6 +258,24 @@ is read as described in
 The version is pinned on purpose: Trivy's own release 0.69.4 was compromised in
 March 2026 (CVE-2026-33634), so a new version is only used after it has been
 checked and the pin changed.
+
+With `explain: "true"`, each note also holds an AI explanation, as described
+in [Explaining findings with an AI](#explaining-findings-with-an-ai). The AI is
+the one set up in the project's settings; its key comes from a repository
+secret, given to the step under the name the settings use:
+
+```yaml
+      - uses: Fatennhrb/SecureLint@v0.6.0 # pin the commit in real use
+        with:
+          explain: "true"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Only the scan for the notes asks the AI; the SARIF report is written without
+explanations, so nothing is paid for twice. Pull requests from forks get no
+secrets: their notes simply come without explanations, and the check works as
+usual. Each explained finding is a paid request to the provider.
 
 The Action installs SecureLint from its own files, so `@v0.5.0` always runs
 SecureLint 0.5.0; the `trivy` input exists from that version. Settings,

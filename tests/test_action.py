@@ -138,6 +138,7 @@ def run_scan_script(
     sarif_file: str = "",
     base_ref: str = "",
     trivy: str = "false",
+    explain: str = "false",
     runner_temp: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     assert BASH is not None
@@ -151,6 +152,7 @@ def run_scan_script(
         "SARIF_FILE": sarif_file,
         "BASE_REF": base_ref,
         "TRIVY": trivy,
+        "EXPLAIN": explain,
         "RUNNER_TEMP": str(runner_temp or workspace),
     }
     return subprocess.run(  # noqa: S603 (bash, a list of arguments)
@@ -422,3 +424,71 @@ def test_a_failed_trivy_scan_stops(tmp_path: Path) -> None:
 
     assert completed.returncode == 2
     assert "Trivy could not complete its scan" in completed.stdout
+
+
+# Explanations (the explain input).
+
+
+@needs_bash
+@pytest.mark.parametrize("value", ["yes", ""])
+def test_script_refuses_a_wrong_explain_value(tmp_path: Path, value: str) -> None:
+    completed = run_scan_script(tmp_path, explain=value)
+
+    assert completed.returncode == 2
+    assert "explain must be" in completed.stdout
+
+
+@needs_bash
+def test_explanations_are_asked_once_and_change_nothing(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("eval(x)\n", encoding="utf-8")
+
+    completed = run_scan_script(tmp_path, explain="true", sarif_file="out.sarif")
+
+    # No provider is set up: the scan is reported as it is, and only the
+    # scan for the notes tried to explain, not the SARIF one.
+    assert completed.returncode == 1
+    assert notes(completed.stdout)[0].startswith("::error file=app.py,line=1,")
+    assert completed.stderr.count("no explanations were added") == 1
+
+
+@needs_bash
+def test_a_missing_secret_skips_explanations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pull requests from forks get no secrets: the key is simply not there.
+    monkeypatch.delenv("PROJECT_AI_KEY", raising=False)
+    (tmp_path / "app.py").write_text("eval(x)\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.securelint.ai]\n"
+        'provider = "openai-compatible"\nmodel = "m"\n'
+        'base-url = "https://ai.example"\napi-key-env = "PROJECT_AI_KEY"\n',
+        encoding="utf-8",
+    )
+
+    completed = run_scan_script(tmp_path, explain="true")
+
+    assert completed.returncode == 1
+    assert "PROJECT_AI_KEY is not set" in completed.stderr
+
+
+@needs_bash
+@pytest.mark.parametrize(
+    ("explain", "package"), [("true", "/action[anthropic]"), ("false", "/action")]
+)
+def test_the_anthropic_package_is_installed_only_for_explanations(
+    tmp_path: Path, explain: str, package: str
+) -> None:
+    # A "python" that prints what it was asked to install.
+    fake_program(tmp_path / "bin", "python", 'echo "$@"\n')
+
+    completed = run_step(
+        "Install SecureLint",
+        tmp_path,
+        tmp_path,
+        PYTHON=str(tmp_path / "bin" / "python"),
+        ACTION_PATH="/action",
+        EXPLAIN=explain,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stdout.split()[-1] == package

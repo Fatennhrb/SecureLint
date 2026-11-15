@@ -9,6 +9,11 @@ What changed in each version of SecureLint, newest first.
   after the policy has decided, so it never changes what blocks or the exit
   code, and an explanation that fails is only skipped. No AI provider can be
   set up yet: for now the option only says so.
+- What is sent to explain a finding is the finding and the 3 lines before
+  and after it, never the whole file. Before it leaves, every string on the
+  line of a hard-coded secret, the value of any name that sounds secret, and
+  text shaped like a well-known key are replaced by `***`. Lines are cut at
+  200 characters.
 
 ## 0.5.0 (2026-11-15)
 

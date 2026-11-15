@@ -24,7 +24,7 @@ from securelint.changes import (
 )
 from securelint.config import Config, ConfigError, load_config
 from securelint.engine import Rule, ScanResult, scan
-from securelint.explain import Explainer, add_explanations
+from securelint.explain import Explainer, add_explanations, file_lines
 from securelint.github_report import format_github, format_step_summary
 from securelint.html_report import format_html
 from securelint.model import Finding
@@ -234,7 +234,7 @@ def _run_scan(
     result = apply_policy(result, project.config.policy)
     # Only after the decision: an explanation can never change it.
     if explain:
-        result = _explain(result, project.config)
+        result = _explain(result, project.config, target)
 
     # The report goes to standard output; everything about the scan itself
     # goes to standard error, so `securelint scan > report.txt` stays clean.
@@ -358,12 +358,15 @@ def make_explainer(config: Config) -> Explainer | None:
     return None
 
 
-def _explain(result: ScanResult, config: Config) -> ScanResult:
+def _explain(result: ScanResult, config: Config, target: Path) -> ScanResult:
     explainer = make_explainer(config)
     if explainer is None:
         _print_error("no AI provider is set up yet; no explanations were added")
         return result
-    result, problems = add_explanations(result, explainer)
+    # Paths in findings start at the scanned folder (or at the scanned
+    # file's folder).
+    folder = target if target.is_dir() else target.parent
+    result, problems = add_explanations(result, explainer, file_lines(folder))
     for problem in problems:
         _print_error(problem)
     return result

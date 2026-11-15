@@ -15,6 +15,7 @@ from securelint.config import Config
 from securelint.engine import ScanResult
 from securelint.explain import Explainer, add_explanations
 from securelint.model import Confidence, Finding, Severity
+from securelint.prompt import Prompt
 
 # Line 1: SL102 (high). Line 2: SL104 (medium).
 CODE = 'os.system("ping " + input())\nDB_PASSWORD = "hunter2"\n'
@@ -26,13 +27,22 @@ class FakeExplainer:
     def __init__(self, answer: str = "Because {rule}.", fail_on: str = "") -> None:
         self.answer = answer
         self.fail_on = fail_on
-        self.asked: list[Finding] = []
+        self.asked: list[Prompt] = []
 
-    def explain(self, finding: Finding) -> str:
-        self.asked.append(finding)
-        if finding.rule_id == self.fail_on:
+    def explain(self, prompt: Prompt) -> str:
+        self.asked.append(prompt)
+        rule = prompt.user.splitlines()[0].removeprefix("Rule: ")
+        if rule == self.fail_on:
             raise TimeoutError("the AI took too long")
-        return self.answer.format(rule=finding.rule_id)
+        return self.answer.format(rule=rule)
+
+
+def no_lines(path: str) -> tuple[str, ...]:
+    return ()
+
+
+def rules_asked(explainer: FakeExplainer) -> list[str]:
+    return [prompt.user.splitlines()[0] for prompt in explainer.asked]
 
 
 def finding(rule_id: str = "T001", line: int = 1) -> Finding:
@@ -57,10 +67,10 @@ def test_blocking_findings_are_explained_before_warnings() -> None:
     )
     explainer = FakeExplainer()
 
-    explained, problems = add_explanations(result, explainer)
+    explained, problems = add_explanations(result, explainer, no_lines)
 
     # Known findings are not shown, so they are not explained either.
-    assert [item.rule_id for item in explainer.asked] == ["T001", "T002"]
+    assert rules_asked(explainer) == ["Rule: T001", "Rule: T002"]
     assert explained.explanations == (
         (finding("T001"), "Because T001."),
         (finding("T002", line=2), "Because T002."),
@@ -75,7 +85,7 @@ def test_only_the_first_findings_are_explained() -> None:
     result = ScanResult(findings=findings, failures=(), files_scanned=1)
     explainer = FakeExplainer()
 
-    explained, problems = add_explanations(result, explainer, limit=3)
+    explained, problems = add_explanations(result, explainer, no_lines, limit=3)
 
     assert len(explainer.asked) == 3
     assert len(explained.explanations) == 3
@@ -91,7 +101,9 @@ def test_a_failure_costs_only_its_own_explanation() -> None:
         files_scanned=1,
     )
 
-    explained, problems = add_explanations(result, FakeExplainer(fail_on="T001"))
+    explained, problems = add_explanations(
+        result, FakeExplainer(fail_on="T001"), no_lines
+    )
 
     assert [item.rule_id for item, _ in explained.explanations] == ["T002"]
     assert problems == ["cannot explain T001 at app.py:1: the AI took too long"]
@@ -100,8 +112,10 @@ def test_a_failure_costs_only_its_own_explanation() -> None:
 def test_answers_are_one_line_and_empty_ones_are_dropped() -> None:
     result = ScanResult(findings=(finding(),), failures=(), files_scanned=1)
 
-    spread, _ = add_explanations(result, FakeExplainer("First.\n\n  Second.\t"))
-    empty, _ = add_explanations(result, FakeExplainer(" \n "))
+    spread, _ = add_explanations(
+        result, FakeExplainer("First.\n\n  Second.\t"), no_lines
+    )
+    empty, _ = add_explanations(result, FakeExplainer(" \n "), no_lines)
 
     assert spread.explanations == ((finding(), "First. Second."),)
     assert empty.explanations == ()

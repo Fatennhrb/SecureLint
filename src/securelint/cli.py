@@ -17,6 +17,7 @@ from securelint.baseline import (
     save_baseline,
     split_known,
 )
+from securelint.cache import CACHE_FOLDER, ExplanationCache
 from securelint.changes import (
     ChangesError,
     find_changed_lines,
@@ -235,7 +236,7 @@ def _run_scan(
     result = apply_policy(result, project.config.policy)
     # Only after the decision: an explanation can never change it.
     if explain:
-        result = _explain(result, project.config, target)
+        result = _explain(result, project, target)
 
     # The report goes to standard output; everything about the scan itself
     # goes to standard error, so `securelint scan > report.txt` stays clean.
@@ -361,7 +362,8 @@ def make_explainer(config: Config) -> Explainer | None:
     return make_provider(config.ai)
 
 
-def _explain(result: ScanResult, config: Config, target: Path) -> ScanResult:
+def _explain(result: ScanResult, project: _Project, target: Path) -> ScanResult:
+    config = project.config
     try:
         explainer = make_explainer(config)
     except ProviderError as error:
@@ -377,9 +379,24 @@ def _explain(result: ScanResult, config: Config, target: Path) -> ScanResult:
     # Paths in findings start at the scanned folder (or at the scanned
     # file's folder).
     folder = target if target.is_dir() else target.parent
-    result, problems = add_explanations(result, explainer, file_lines(folder))
+    cache = None
+    if config.ai is not None:
+        ai = config.ai
+        scope = "\0".join([ai.provider, ai.model, ai.base_url or ""])
+        cache = ExplanationCache(project.root / CACHE_FOLDER, scope)
+        if cache.problem is not None:
+            _print_error(cache.problem)
+    result, problems = add_explanations(
+        result, explainer, file_lines(folder), cache=cache
+    )
     for problem in problems:
         _print_error(problem)
+    if cache is not None:
+        if cache.hits:
+            _print_error(f"explanations used again from the cache: {cache.hits}")
+        failure = cache.save()
+        if failure is not None:
+            _print_error(failure)
     return result
 
 

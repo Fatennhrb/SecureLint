@@ -369,6 +369,11 @@ What the AI can and cannot do:
 - At most 10 findings are explained in one scan, blocking ones first. Each
   explanation is a paid request to the provider, unless the model runs on this
   machine.
+- Explanations are kept in `.securelint-cache/` at the top of the project, so
+  the next scan asks again only when something changed: the rule, the lines
+  around the finding, the provider or the model. Only answers that passed the
+  checks are kept, and the cache holds no code. The folder has its own
+  `.gitignore`, so it is never committed; delete it to ask everything again.
 
 ## Rules
 

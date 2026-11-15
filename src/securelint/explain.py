@@ -20,6 +20,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any, Protocol
 
+from securelint.cache import ExplanationCache
 from securelint.engine import ScanResult
 from securelint.model import Finding
 from securelint.prompt import Prompt, build_prompt
@@ -58,6 +59,7 @@ def add_explanations(
     explainer: Explainer,
     read_lines: LineReader,
     limit: int = MAX_EXPLAINED,
+    cache: ExplanationCache | None = None,
 ) -> tuple[ScanResult, list[str]]:
     """Return ``result`` with explanations, and the problems met on the way.
 
@@ -65,14 +67,25 @@ def add_explanations(
     ``limit`` in all. Known, silenced and out-of-change findings are not
     explained: they are not shown either. The findings themselves, and so
     the exit code, are left exactly as they were.
+
+    With a ``cache``, an explanation already given for the same prompt is
+    used again instead of asking the AI. Only answers that passed the
+    checks are kept.
     """
     wanted: Sequence[Finding] = [*result.findings, *result.warnings]
     problems: list[str] = []
     explained: list[tuple[Finding, str]] = []
     for finding in wanted[:limit]:
         try:
-            answer = explainer.explain(build_prompt(finding, read_lines(finding.path)))
-            explained.append((finding, parse_answer(answer)))
+            prompt = build_prompt(finding, read_lines(finding.path))
+            kept = cache.get(prompt) if cache is not None else None
+            if kept is not None:
+                explained.append((finding, kept))
+                continue
+            explanation = parse_answer(explainer.explain(prompt))
+            explained.append((finding, explanation))
+            if cache is not None:
+                cache.put(prompt, explanation)
         except Exception as error:
             # Any failure, whatever its kind, costs this one explanation and
             # nothing more: the scan's result is already decided.

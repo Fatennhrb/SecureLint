@@ -15,6 +15,9 @@ What changed in each version of SecureLint, newest first.
   environment variable; a key written in the settings stops the scan. A
   `base-url` must be `https://`, or `http://` on this machine, and redirects
   are not followed.
+- Explanations are kept in `.securelint-cache/` (never committed, no code in
+  it), so the same finding with the same lines around it is not sent to the
+  AI again. A damaged or unwritable cache is reported and changes nothing.
 - What is sent to explain a finding is the finding and the 3 lines before
   and after it, never the whole file. Before it leaves, every string on the
   line of a hard-coded secret, the value of any name that sounds secret, and

@@ -246,8 +246,27 @@ def test_scan_reports_the_dependency_with_the_code(
     captured = capsys.readouterr()
     assert "app.py:1:1" in captured.out
     assert "requirements.txt:2:1  medium    SL201" in captured.out
-    assert "2 problems found" in captured.out
+    # app.py and requirements.txt: two files were checked, not one.
+    assert "2 problems found in 2 files (1 high, 1 medium)." in captured.out
     assert "using Trivy report" in captured.err
+
+
+def test_files_are_counted_once_and_only_with_problems(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (project / "app.py").write_text("print('safe')\n", encoding="utf-8")
+    two_problems = report(
+        vulnerability(), vulnerability(VulnerabilityID="CVE-2024-35195")
+    )
+    nothing = {"SchemaVersion": 2, "Results": [{"Target": "requirements.txt"}]}
+
+    scan(project, "--trivy-report", str(write_report(project.parent, two_problems)))
+    with_problems = capsys.readouterr().out
+    scan(project, "--trivy-report", str(write_report(project.parent, nothing)))
+    without = capsys.readouterr().out
+
+    assert "2 problems found in 2 files" in with_problems
+    assert without == "No problems found in 1 file.\n"
 
 
 def test_the_policy_applies_to_dependencies(

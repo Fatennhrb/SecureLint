@@ -325,7 +325,15 @@ def _scan_project(
         return None
     _print_error(f"using Trivy report {trivy_report}")
     findings = sorted([*result.findings, *dependencies], key=_sort_key)
-    return replace(result, findings=tuple(findings))
+    # The files the report has problems in were checked too, through
+    # Trivy: "3 problems found in 1 file" would be wrong when they are in
+    # three files.
+    checked_by_trivy = len({finding.path for finding in dependencies})
+    return replace(
+        result,
+        findings=tuple(findings),
+        files_scanned=result.files_scanned + checked_by_trivy,
+    )
 
 
 def _write_step_summary(result: ScanResult) -> None:

@@ -236,6 +236,7 @@ a hard-coded password, and leaves alone an old problem listed in its baseline.
 | `changed-only` | `true` | On a pull request, report only the changed lines. |
 | `sarif-file` | (empty) | Also write a SARIF report of the whole scan to this file. |
 | `python-version` | `3.13` | Python used to run SecureLint. The job's own Python is not changed. |
+| `trivy` | `false` | Also check dependencies and Dockerfiles with Trivy (Linux runners only). |
 
 To see the findings in the repository's Security tab as well, set
 `sarif-file: securelint.sarif`, give the job the `security-events: write`
@@ -243,6 +244,15 @@ permission, and upload the file with the `upload-sarif` step of
 `github/codeql-action`, pinned to a commit like the steps above. GitHub does
 not let pull requests from forks upload SARIF; the notes on the lines still
 work for them.
+
+With `trivy: "true"`, the Action downloads Trivy 0.76.2 from its GitHub
+release, checks the download against the checksum written in `action.yml`, and
+runs it only if they match. Trivy then checks the same folder, and its report
+is read as described in
+[Checking dependencies and Dockerfiles with Trivy](#checking-dependencies-and-dockerfiles-with-trivy).
+The version is pinned on purpose: Trivy's own release 0.69.4 was compromised in
+March 2026 (CVE-2026-33634), so a new version is only used after it has been
+checked and the pin changed.
 
 The Action installs SecureLint from its own files, so `@v0.4.0` always runs
 SecureLint 0.4.0. Settings, silencing comments, the baseline and the policy

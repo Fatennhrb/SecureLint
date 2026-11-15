@@ -70,3 +70,6 @@ jobs:
 
       - name: Scan with SecureLint
         uses: ./
+        with:
+          # Also download the pinned Trivy, verify it and read its report.
+          trivy: "true"

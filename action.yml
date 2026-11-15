@@ -41,6 +41,13 @@ inputs:
     description: Python version used to run SecureLint (3.11 or newer).
     required: false
     default: "3.13"
+  trivy:
+    description: >-
+      Also check dependencies and Dockerfiles with Trivy ("true" or "false").
+      A pinned Trivy release is downloaded and its checksum verified before
+      it runs. Linux runners only.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -62,6 +69,61 @@ runs:
       run: |
         "$PYTHON" -m pip install --disable-pip-version-check --no-input --quiet "$ACTION_PATH"
 
+    - name: Install Trivy
+      if: inputs.trivy == 'true'
+      shell: bash
+      env:
+        # Trivy's release 0.76.2, after every published advisory (the March
+        # 2026 supply-chain compromise hit 0.69.4). The checksums come from
+        # the release's checksums file and match GitHub's own digest of each
+        # file. To update: change all three together.
+        TRIVY_VERSION: "0.76.2"
+        TRIVY_SHA256_X64: bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
+        TRIVY_SHA256_ARM64: ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3
+      run: |
+        set -u
+        case "$RUNNER_OS/$RUNNER_ARCH" in
+          Linux/X64) asset=Linux-64bit expected=$TRIVY_SHA256_X64 ;;
+          Linux/ARM64) asset=Linux-ARM64 expected=$TRIVY_SHA256_ARM64 ;;
+          *)
+            echo "::error::SecureLint: Trivy can only be used on Linux runners (x64 or ARM64)"
+            exit 2
+            ;;
+        esac
+
+        folder="$RUNNER_TEMP/securelint-trivy"
+        mkdir -p "$folder"
+        archive="$folder/trivy.tar.gz"
+        url="https://github.com/aquasecurity/trivy/releases/download/v$TRIVY_VERSION/trivy_${TRIVY_VERSION}_$asset.tar.gz"
+        if ! curl --fail --silent --show-error --location --proto '=https' --retry 3 --output "$archive" "$url"; then
+          echo "::error::SecureLint: could not download Trivy $TRIVY_VERSION"
+          exit 2
+        fi
+
+        # Nothing downloaded runs before its checksum is verified.
+        actual=$(sha256sum "$archive" | cut -d " " -f 1)
+        if [ "$actual" != "$expected" ]; then
+          echo "::error::SecureLint: the Trivy download does not have the expected checksum; it was not run"
+          rm -f "$archive"
+          exit 2
+        fi
+        tar -xzf "$archive" -C "$folder" trivy
+        "$folder/trivy" --version
+
+    - name: Run Trivy
+      if: inputs.trivy == 'true'
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+      run: |
+        set -u
+        # The same folder SecureLint scans, so the report's paths match.
+        if ! "$RUNNER_TEMP/securelint-trivy/trivy" fs --scanners vuln,misconfig \
+          --format json --output "$RUNNER_TEMP/securelint-trivy.json" --quiet -- "$SCAN_PATH"; then
+          echo "::error::SecureLint: Trivy could not complete its scan"
+          exit 2
+        fi
+
     - name: Scan with SecureLint
       shell: bash
       env:
@@ -69,6 +131,7 @@ runs:
         SCAN_PATH: ${{ inputs.path }}
         CHANGED_ONLY: ${{ inputs.changed-only }}
         SARIF_FILE: ${{ inputs.sarif-file }}
+        TRIVY: ${{ inputs.trivy }}
         # Set only on pull requests: the branch the pull request goes into.
         BASE_REF: ${{ github.base_ref }}
       run: |
@@ -80,8 +143,16 @@ runs:
             exit 2
             ;;
         esac
+        case "$TRIVY" in
+          true) report=(--trivy-report "$RUNNER_TEMP/securelint-trivy.json") ;;
+          false) report=() ;;
+          *)
+            echo "::error::SecureLint: trivy must be \"true\" or \"false\""
+            exit 2
+            ;;
+        esac
 
-        options=(--format github)
+        options=(--format github "${report[@]}")
         if [ "$CHANGED_ONLY" = "true" ] && [ -n "$BASE_REF" ]; then
           options+=(--changed-since "origin/$BASE_REF")
         fi
@@ -94,7 +165,7 @@ runs:
           # The whole scan, not only the changed lines: GitHub compares the
           # results of two uploads itself.
           sarif_status=0
-          "$PYTHON" -m securelint scan --format sarif -- "$SCAN_PATH" > "$SARIF_FILE" || sarif_status=$?
+          "$PYTHON" -m securelint scan --format sarif "${report[@]}" -- "$SCAN_PATH" > "$SARIF_FILE" || sarif_status=$?
           if [ "$sarif_status" -ge 2 ] && [ "$status" -lt 2 ]; then
             echo "::error::SecureLint could not complete the scan for the SARIF report"
             status=2

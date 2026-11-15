@@ -12,6 +12,9 @@ What changed in each version of SecureLint, newest first.
 - The same report's failed configuration checks (Trivy's `misconfig`
   scanner) become findings of rule `SL202`, on the Dockerfile line Trivy
   points to.
+- The Action's `trivy` input downloads Trivy 0.76.2, checks it against a
+  pinned checksum before running it, and adds its report to the scan.
+  SecureLint's own CI uses it.
 
 ## 0.4.0 (2026-11-15)
 

@@ -55,8 +55,29 @@ def run_scripts() -> dict[str, str]:
     return scripts
 
 
-def test_the_action_has_both_scripts() -> None:
-    assert set(run_scripts()) == {"Install SecureLint", "Scan with SecureLint"}
+def test_the_action_has_its_scripts() -> None:
+    assert set(run_scripts()) == {
+        "Install SecureLint",
+        "Install Trivy",
+        "Run Trivy",
+        "Scan with SecureLint",
+    }
+
+
+def trivy_pins() -> dict[str, str]:
+    text = ACTION.read_text(encoding="utf-8")
+    return dict(re.findall(r"^\s*(TRIVY_\w+):\s*\"?([\w.]+)\"?", text, re.MULTILINE))
+
+
+def test_trivy_is_pinned_to_a_release_after_the_advisories() -> None:
+    pins = trivy_pins()
+    version = tuple(int(part) for part in pins["TRIVY_VERSION"].split("."))
+
+    # 0.69.4 was the compromised release (CVE-2026-33634); 0.72.0 fixes the
+    # last advisory published before this pin was chosen.
+    assert version >= (0, 72, 0)
+    for key in ("TRIVY_SHA256_X64", "TRIVY_SHA256_ARM64"):
+        assert re.fullmatch(r"[0-9a-f]{64}", pins[key]), key
 
 
 def test_no_value_is_written_into_a_script() -> None:
@@ -116,6 +137,8 @@ def run_scan_script(
     changed_only: str = "true",
     sarif_file: str = "",
     base_ref: str = "",
+    trivy: str = "false",
+    runner_temp: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     assert BASH is not None
     environment = {
@@ -127,6 +150,8 @@ def run_scan_script(
         "CHANGED_ONLY": changed_only,
         "SARIF_FILE": sarif_file,
         "BASE_REF": base_ref,
+        "TRIVY": trivy,
+        "RUNNER_TEMP": str(runner_temp or workspace),
     }
     return subprocess.run(  # noqa: S603 (bash, a list of arguments)
         [BASH, "-c", run_scripts()["Scan with SecureLint"]],
@@ -272,3 +297,128 @@ def test_script_with_an_unknown_target_branch_stops(pull_request: Path) -> None:
 
     assert completed.returncode == 2
     assert "cannot find where this branch left" in completed.stderr
+
+
+@needs_bash
+@pytest.mark.parametrize("value", ["yes", ""])
+def test_script_refuses_a_wrong_trivy_value(tmp_path: Path, value: str) -> None:
+    completed = run_scan_script(tmp_path, trivy=value)
+
+    assert completed.returncode == 2
+    assert "trivy must be" in completed.stdout
+
+
+def fake_program(folder: Path, name: str, script: str) -> None:
+    """Write a small shell script that stands in for a real program."""
+    folder.mkdir(parents=True, exist_ok=True)
+    program = folder / name
+    program.write_text("#!/bin/sh\n" + textwrap.dedent(script), encoding="utf-8")
+    program.chmod(0o755)
+
+
+def run_step(
+    name: str, workspace: Path, runner_temp: Path, **values: str
+) -> subprocess.CompletedProcess[str]:
+    assert BASH is not None
+    environment = dict(os.environ) | {"RUNNER_TEMP": str(runner_temp)} | values
+    return subprocess.run(  # noqa: S603 (bash, a list of arguments)
+        [BASH, "-c", run_scripts()[name]],
+        cwd=workspace,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@needs_bash
+def test_trivy_is_only_installed_on_linux(tmp_path: Path) -> None:
+    completed = run_step(
+        "Install Trivy", tmp_path, tmp_path, RUNNER_OS="macOS", RUNNER_ARCH="ARM64"
+    )
+
+    assert completed.returncode == 2
+    assert "only be used on Linux runners" in completed.stdout
+
+
+@needs_bash
+def test_a_download_with_the_wrong_checksum_never_runs(tmp_path: Path) -> None:
+    # A "curl" that writes something else than the real Trivy archive.
+    tools = tmp_path / "tools"
+    fake_program(
+        tools,
+        "curl",
+        """
+        while [ $# -gt 0 ]; do
+          if [ "$1" = "--output" ]; then echo "not trivy" > "$2"; fi
+          shift
+        done
+        """,
+    )
+    path = f"{tools}{os.pathsep}{os.environ['PATH']}"
+
+    completed = run_step(
+        "Install Trivy",
+        tmp_path,
+        tmp_path,
+        PATH=path,
+        RUNNER_OS="Linux",
+        RUNNER_ARCH="X64",
+        **trivy_pins(),
+    )
+
+    assert completed.returncode == 2
+    assert "does not have the expected checksum; it was not run" in completed.stdout
+    assert list((tmp_path / "securelint-trivy").iterdir()) == []
+
+
+@needs_bash
+def test_the_trivy_report_reaches_the_scan(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "requirements.txt").write_text("requests==2.25.0\n", encoding="utf-8")
+    report = {
+        "SchemaVersion": 2,
+        "Results": [
+            {
+                "Target": "requirements.txt",
+                "Vulnerabilities": [
+                    {
+                        "VulnerabilityID": "CVE-2023-32681",
+                        "PkgName": "requests",
+                        "InstalledVersion": "2.25.0",
+                        "Severity": "MEDIUM",
+                    }
+                ],
+            }
+        ],
+    }
+    # A "trivy" that writes a fixed report where it is asked to.
+    fake_program(
+        tmp_path / "securelint-trivy",
+        "trivy",
+        f"""
+        while [ $# -gt 0 ]; do
+          if [ "$1" = "--output" ]; then echo '{json.dumps(report)}' > "$2"; fi
+          shift
+        done
+        """,
+    )
+
+    ran = run_step("Run Trivy", workspace, tmp_path, SCAN_PATH=".")
+    completed = run_scan_script(workspace, trivy="true", runner_temp=tmp_path)
+
+    assert ran.returncode == 0, ran.stdout
+    assert completed.returncode == 1
+    (note,) = notes(completed.stdout)
+    assert note.startswith("::error file=requirements.txt,line=1,col=1,title=SL201")
+
+
+@needs_bash
+def test_a_failed_trivy_scan_stops(tmp_path: Path) -> None:
+    fake_program(tmp_path / "securelint-trivy", "trivy", "exit 1\n")
+
+    completed = run_step("Run Trivy", tmp_path, tmp_path, SCAN_PATH=".")
+
+    assert completed.returncode == 2
+    assert "Trivy could not complete its scan" in completed.stdout

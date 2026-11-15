@@ -43,14 +43,22 @@ SYSTEM = (
     "whether the finding blocks the change: that is already decided."
 )
 
-# A quoted string on one line, with escaped quotes inside it.
-_STRING = re.compile(r"""(?P<quote>["'])(?:\\.|(?!(?P=quote)).)*(?P=quote)""")
+# A quoted string on one line, with escaped quotes inside it. A backslash is
+# only ever read as the start of an escape, and "*+" never backtracks, so an
+# unclosed string full of backslashes cannot make the search explode.
+_STRING = re.compile(r"""(?P<quote>["'])(?:\\.|(?!(?P=quote))[^\\])*+(?P=quote)""")
 
 # A name that sounds secret, then "=" or ":", then its value: Python
 # (DB_PASSWORD = "x"), Dockerfile (ENV API_TOKEN=x), settings (token: x).
+#
+# Written so that it never backtracks: the name starts only at the start of
+# a word, the look-ahead checks the word holds a secret-sounding part, and
+# "*+" takes the whole word at once. A pattern free to retry every position
+# took 74 seconds on one 40,000-character line; this one takes milliseconds.
 _SECRET_VALUE = re.compile(
-    r"""(?P<name>[\w.-]*(?:passw(?:or)?d|secret|token|api[_-]?key|apikey"""
-    r"""|private[_-]?key|credential)[\w.-]*["']?\s*[=:]\s*)(?P<value>.+)""",
+    r"""(?P<name>(?<![\w.-])(?=[\w.-]*?(?:passw(?:or)?d|secret|token"""
+    r"""|api[_-]?key|apikey|private[_-]?key|credential))"""
+    r"""[\w.-]*+["']?\s*+[=:]\s*+)(?P<value>.+)""",
     re.IGNORECASE,
 )
 

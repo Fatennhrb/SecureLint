@@ -1,5 +1,6 @@
 """Tests for what is sent to an AI: a few lines, with secrets hidden."""
 
+import time
 from pathlib import Path
 
 import pytest
@@ -72,6 +73,27 @@ def test_a_long_line_is_cut() -> None:
     (row,) = [row for row in prompt.user.splitlines() if row.startswith(">")]
     assert len(row) < MAX_LINE + 10
     assert row.endswith("...")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "x = " + "a" * 100_000,
+        "token" * 20_000 + " x",
+        "a.b-c " * 20_000,
+        '"' + "\\" * 100_000,
+        '"' + "\\a" * 50_000,
+    ],
+    ids=["long word", "repeated name", "many words", "backslashes", "escapes"],
+)
+@pytest.mark.parametrize("every_string", [False, True])
+def test_masking_a_hostile_line_stays_fast(line: str, every_string: bool) -> None:
+    # A pattern that backtracks took 74 s on a 40,000-character line. Lines
+    # are cut only after masking, so masking itself must stay linear.
+    start = time.perf_counter()
+    mask(line, every_string=every_string)
+
+    assert time.perf_counter() - start < 1.0
 
 
 @pytest.mark.parametrize(

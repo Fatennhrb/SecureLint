@@ -2,6 +2,14 @@
 
 What changed in each version of SecureLint, newest first.
 
+## Unreleased
+
+- `benchmarks/compare_bandit.py` runs SecureLint and Bandit 1.9.4 on the
+  annotated corpus and scores both the same way, by statement, for the five
+  kinds of problems both look for. The README shows the results and what
+  they leave out: the corpus favours SecureLint, and Bandit does better on
+  hard-coded secrets.
+
 ## 0.6.0 (2026-11-15)
 
 AI explanations: a few plain words under each finding, from the AI the

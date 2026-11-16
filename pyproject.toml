@@ -20,6 +20,9 @@ anthropic = ["anthropic>=2.8,<3"]
 dev = [
     # So the tests also check the Claude provider against the real package.
     "anthropic>=2.8,<3",
+    # Pinned: the comparison in benchmarks/compare_bandit.py publishes its
+    # numbers, and another Bandit version could change them.
+    "bandit==1.9.4",
     "pytest>=8",
     # Ruff adds and changes rules between 0.x minor releases, so stay within
     # one minor version: a dependency update alone must never break the build.

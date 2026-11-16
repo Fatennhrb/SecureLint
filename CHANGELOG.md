@@ -14,7 +14,8 @@ What changed in each version of SecureLint, newest first.
   local model such as Ollama, with no package). The key is read from an
   environment variable; a key written in the settings stops the scan. A
   `base-url` must be `https://`, or `http://` on this machine, and redirects
-  are not followed.
+  are not followed. A busy OpenAI-compatible service (429 or 5xx) is asked
+  again up to two times, waiting longer each time.
 - Explanations are kept in `.securelint-cache/` (never committed, no code in
   it), so the same finding with the same lines around it is not sent to the
   AI again. A damaged or unwritable cache is reported and changes nothing.

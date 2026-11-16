@@ -372,7 +372,12 @@ The `anthropic` provider uses Anthropic's own Python package, installed only
 when asked for: `pip install "securelint[anthropic]"`. SecureLint itself still
 needs nothing beyond Python. With the Claude models that support it, a request
 the model declines is answered by Anthropic's fallback model in the same call.
-The `openai-compatible` provider needs no package.
+The `openai-compatible` provider needs no package. It works with any service
+that offers the OpenAI `/chat/completions` format, Gemini included (its
+`base-url` is `https://generativelanguage.googleapis.com/v1beta/openai`). When
+the service is busy (HTTP 429, 500, 502, 503 or 504), it is asked again up to
+two times, after 2 and then 4 seconds, or after the wait the service asks for
+(30 seconds at most). A wrong key, model or address is never retried.
 
 What the AI can and cannot do:
 

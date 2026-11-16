@@ -18,8 +18,10 @@ the settings file.
 import importlib
 import json
 import os
+import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from typing import Any
 
 from securelint.config import AISettings
@@ -35,6 +37,19 @@ large so a model that thinks first is not cut off before it answers."""
 
 MAX_RESPONSE = 1_000_000
 """Bytes read from an OpenAI-compatible service at most."""
+
+RETRIES = 2
+"""Times a busy OpenAI-compatible service is asked again."""
+
+BASE_DELAY = 2
+"""Seconds before the first retry; each next one waits twice as long."""
+
+MAX_DELAY = 30
+"""Seconds waited at most, even when the service asks for more."""
+
+# Statuses that mean "busy, try again later": too many requests, or a
+# temporary error on the service's side.
+_BUSY = frozenset({429, 500, 502, 503, 504})
 
 # Claude models that accept server-side fallbacks: if the model declines a
 # request, Anthropic answers it with a fallback model in the same call.
@@ -135,13 +150,27 @@ class _NoRedirects(urllib.request.HTTPRedirectHandler):
 
 
 class OpenAICompatibleExplainer:
-    """Asks a service that speaks the OpenAI ``/chat/completions`` format."""
+    """Asks a service that speaks the OpenAI ``/chat/completions`` format.
 
-    def __init__(self, model: str, base_url: str, key: str | None) -> None:
+    A busy service (HTTP 429, or 500, 502, 503 and 504) is asked again, up
+    to ``RETRIES`` times, waiting longer each time, as services such as
+    Gemini recommend. Other errors (a wrong key, model or address) are never
+    retried: asking again would only fail again. A timeout is not retried
+    either, since it has already waited ``TIMEOUT`` seconds.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        base_url: str,
+        key: str | None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self.model = model
         self.url = base_url.rstrip("/") + "/chat/completions"
         self.key = key
         self.opener = urllib.request.build_opener(_NoRedirects)
+        self.sleep = sleep
 
     def explain(self, prompt: Prompt) -> str:
         body = {
@@ -157,17 +186,35 @@ class OpenAICompatibleExplainer:
         request = urllib.request.Request(  # noqa: S310 (scheme checked in the settings)
             self.url, data=json.dumps(body).encode(), headers=headers, method="POST"
         )
-        try:
-            with self.opener.open(request, timeout=TIMEOUT) as response:
-                raw = response.read(MAX_RESPONSE + 1)
-        except urllib.error.HTTPError as error:
-            # The body is not shown: a service may echo the request in it.
-            raise ProviderError(f"the service answered HTTP {error.code}") from None
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
-            raise ProviderError(f"cannot reach {self.url}: {error}") from None
+        for attempt in range(RETRIES + 1):
+            try:
+                with self.opener.open(request, timeout=TIMEOUT) as response:
+                    raw = response.read(MAX_RESPONSE + 1)
+                break
+            except urllib.error.HTTPError as error:
+                if error.code not in _BUSY or attempt == RETRIES:
+                    tries = f" (after {attempt + 1} attempts)" if attempt else ""
+                    # The body is not shown: a service may echo the request.
+                    raise ProviderError(
+                        f"the service answered HTTP {error.code}{tries}"
+                    ) from None
+                self.sleep(_delay(attempt, error.headers.get("Retry-After")))
+            except (urllib.error.URLError, TimeoutError, OSError) as error:
+                raise ProviderError(f"cannot reach {self.url}: {error}") from None
         if len(raw) > MAX_RESPONSE:
             raise ProviderError("the service's answer is too large")
         return _completion_text(raw)
+
+
+def _delay(attempt: int, retry_after: str | None) -> float:
+    """Seconds to wait before asking again.
+
+    The service's own ``Retry-After`` is followed when it is a short number
+    of seconds; otherwise 2 seconds, then 4.
+    """
+    if retry_after is not None and retry_after.strip().isdigit():
+        return float(min(int(retry_after), MAX_DELAY))
+    return float(BASE_DELAY * 2**attempt)
 
 
 def _completion_text(raw: bytes) -> str:

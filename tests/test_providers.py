@@ -44,6 +44,9 @@ class Service:
     headers: dict[str, str] = field(default_factory=dict)
     requests: list[tuple[str, dict[str, str], Any]] = field(default_factory=list)
     url: str = ""
+    first: list[tuple[int, dict[str, str]]] = field(default_factory=list)
+    """Statuses (with headers) answered first, one per request, before the
+    usual answer: to play a busy service."""
 
     def answer(self, document: Any, status: int = 200) -> None:
         self.status = status
@@ -61,13 +64,17 @@ def service() -> Iterator[Service]:
             # Header names in lower case: their case is not part of HTTP.
             sent = {name.lower(): value for name, value in self.headers.items()}
             state.requests.append((self.path, sent, body))
-            self.send_response(state.status)
-            for name, value in state.headers.items():
+            status, headers, answer = state.status, state.headers, state.body
+            if state.first:
+                status, headers = state.first.pop(0)
+                answer = b'{"error": "busy"}'
+            self.send_response(status)
+            for name, value in headers.items():
                 self.send_header(name, value)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(state.body)))
+            self.send_header("Content-Length", str(len(answer)))
             self.end_headers()
-            self.wfile.write(state.body)
+            self.wfile.write(answer)
 
         def log_message(self, *args: Any) -> None:
             pass
@@ -450,3 +457,76 @@ def test_without_ai_settings_the_option_says_how_to_set_one_up(
 
     assert main(["scan", str(tmp_path), "--explain"]) == 1
     assert "no AI provider is set up in [tool.securelint.ai]" in capsys.readouterr().err
+
+
+# A busy service is asked again; other errors are not.
+
+
+class Waits:
+    """Records the waits instead of sleeping, so tests stay fast."""
+
+    def __init__(self) -> None:
+        self.seconds: list[float] = []
+
+    def __call__(self, seconds: float) -> None:
+        self.seconds.append(seconds)
+
+
+def busy_explainer(service: Service, waits: Waits) -> OpenAICompatibleExplainer:
+    return OpenAICompatibleExplainer("gemini", service.url, "k", sleep=waits)
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+def test_a_busy_service_is_asked_again(service: Service, status: int) -> None:
+    service.answer(completion())
+    service.first = [(status, {})]
+    waits = Waits()
+
+    text = busy_explainer(service, waits).explain(PROMPT)
+
+    assert text == ANSWER
+    assert len(service.requests) == 2
+    assert waits.seconds == [2.0]
+
+
+def test_a_service_busy_every_time_gives_up_after_three_attempts(
+    service: Service,
+) -> None:
+    service.answer(completion())
+    service.first = [(503, {}), (503, {}), (503, {})]
+    waits = Waits()
+
+    with pytest.raises(ProviderError, match=r"HTTP 503 \(after 3 attempts\)"):
+        busy_explainer(service, waits).explain(PROMPT)
+
+    assert len(service.requests) == 3
+    # Waiting longer each time.
+    assert waits.seconds == [2.0, 4.0]
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "waited"), [("1", 1.0), ("3600", 30.0), ("soon", 2.0)]
+)
+def test_the_service_says_how_long_to_wait(
+    service: Service, retry_after: str, waited: float
+) -> None:
+    service.answer(completion())
+    service.first = [(429, {"Retry-After": retry_after})]
+    waits = Waits()
+
+    busy_explainer(service, waits).explain(PROMPT)
+
+    # Followed when short, capped when long, ignored when not a number.
+    assert waits.seconds == [waited]
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+def test_a_wrong_setting_is_never_retried(service: Service, status: int) -> None:
+    service.answer({"error": "no"}, status=status)
+    waits = Waits()
+
+    with pytest.raises(ProviderError, match=f"HTTP {status}$"):
+        busy_explainer(service, waits).explain(PROMPT)
+
+    assert len(service.requests) == 1
+    assert waits.seconds == []

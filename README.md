@@ -278,7 +278,9 @@ secret, given to the step under the name the settings use:
 Only the scan for the notes asks the AI; the SARIF report is written without
 explanations, so nothing is paid for twice. Pull requests from forks get no
 secrets: their notes simply come without explanations, and the check works as
-usual. Each explained finding is a paid request to the provider.
+usual. Each explained finding is a paid request to the provider, unless it has
+a free tier or runs on your own machine. Anthropic's package is installed only
+when the project's settings choose the `anthropic` provider.
 
 The Action installs SecureLint from its own files, so `@v0.6.0` always runs
 SecureLint 0.6.0. The `trivy` input exists from version 0.5.0, and `explain`
@@ -380,7 +382,8 @@ that offers the OpenAI `/chat/completions` format, Gemini included (its
 `base-url` is `https://generativelanguage.googleapis.com/v1beta/openai`). When
 the service is busy (HTTP 429, 500, 502, 503 or 504), it is asked again up to
 two times, after 2 and then 4 seconds, or after the wait the service asks for
-(30 seconds at most). A wrong key, model or address is never retried.
+(30 seconds at most). An answer that takes longer than 60 seconds is asked for
+once more, at once. A wrong key, model or address is never retried.
 
 What the AI can and cannot do:
 

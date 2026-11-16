@@ -155,8 +155,8 @@ class OpenAICompatibleExplainer:
     A busy service (HTTP 429, or 500, 502, 503 and 504) is asked again, up
     to ``RETRIES`` times, waiting longer each time, as services such as
     Gemini recommend. Other errors (a wrong key, model or address) are never
-    retried: asking again would only fail again. A timeout is not retried
-    either, since it has already waited ``TIMEOUT`` seconds.
+    retried: asking again would only fail again. A timeout is retried once,
+    at once, since it has already waited ``TIMEOUT`` seconds.
     """
 
     def __init__(
@@ -186,11 +186,14 @@ class OpenAICompatibleExplainer:
         request = urllib.request.Request(  # noqa: S310 (scheme checked in the settings)
             self.url, data=json.dumps(body).encode(), headers=headers, method="POST"
         )
+        timed_out = False
         for attempt in range(RETRIES + 1):
             try:
                 with self.opener.open(request, timeout=TIMEOUT) as response:
                     raw = response.read(MAX_RESPONSE + 1)
                 break
+            # HTTPError first: it is a kind of URLError, and means the
+            # service answered.
             except urllib.error.HTTPError as error:
                 if error.code not in _BUSY or attempt == RETRIES:
                     tries = f" (after {attempt + 1} attempts)" if attempt else ""
@@ -200,10 +203,25 @@ class OpenAICompatibleExplainer:
                     ) from None
                 self.sleep(_delay(attempt, error.headers.get("Retry-After")))
             except (urllib.error.URLError, TimeoutError, OSError) as error:
+                # One slow answer can be bad luck: ask once more, at once,
+                # since the wait has already been long. A second is not.
+                if _is_timeout(error) and not timed_out and attempt < RETRIES:
+                    timed_out = True
+                    continue
                 raise ProviderError(f"cannot reach {self.url}: {error}") from None
         if len(raw) > MAX_RESPONSE:
             raise ProviderError("the service's answer is too large")
         return _completion_text(raw)
+
+
+def _is_timeout(error: OSError) -> bool:
+    """Tell whether the service took too long, not whether it was unreachable.
+
+    A slow answer raises ``TimeoutError`` itself; a slow connection raises a
+    ``URLError`` around one.
+    """
+    reason = getattr(error, "reason", None)
+    return isinstance(error, TimeoutError) or isinstance(reason, TimeoutError)
 
 
 def _delay(attempt: int, retry_after: str | None) -> float:

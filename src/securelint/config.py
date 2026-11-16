@@ -78,6 +78,23 @@ class Config:
     """The AI used by ``scan --explain``; ``None`` when none is set up."""
 
 
+def ai_provider(target: Path) -> str | None:
+    """Return the AI provider named in the settings for ``target``, if any.
+
+    Only the name is read, and nothing is checked: the GitHub Action uses it
+    to install a provider's package only when it is needed. The scan itself
+    reads and checks every setting, and reports any mistake in them.
+    """
+    try:
+        path = _find_settings_file(target)
+        table = _read_table(path) if path is not None else None
+    except ConfigError:
+        return None
+    settings = (table or {}).get("ai")
+    provider = settings.get("provider") if isinstance(settings, dict) else None
+    return provider if isinstance(provider, str) else None
+
+
 def load_config(target: Path, known_rule_ids: Collection[str]) -> Config:
     """Return the settings that apply to a scan of ``target``.
 

@@ -75,14 +75,17 @@ runs:
         # The Action's own files: the same version as the one asked for.
         ACTION_PATH: ${{ github.action_path }}
         EXPLAIN: ${{ inputs.explain }}
+        SCAN_PATH: ${{ inputs.path }}
       run: |
-        package="$ACTION_PATH"
+        "$PYTHON" -m pip install --disable-pip-version-check --no-input --quiet "$ACTION_PATH"
         if [ "$EXPLAIN" = "true" ]; then
-          # Anthropic's package, for the "anthropic" provider. Only installed
-          # when explanations are asked for.
-          package="$ACTION_PATH[anthropic]"
+          # Anthropic's package, only when the project's settings choose the
+          # "anthropic" provider; other providers need no package.
+          provider=$("$PYTHON" -c 'import sys; from pathlib import Path; from securelint.config import ai_provider; print(ai_provider(Path(sys.argv[1])) or "")' "$SCAN_PATH" || true)
+          if [ "$provider" = "anthropic" ]; then
+            "$PYTHON" -m pip install --disable-pip-version-check --no-input --quiet "$ACTION_PATH[anthropic]"
+          fi
         fi
-        "$PYTHON" -m pip install --disable-pip-version-check --no-input --quiet "$package"
 
     - name: Install Trivy
       if: inputs.trivy == 'true'

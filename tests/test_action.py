@@ -473,13 +473,28 @@ def test_a_missing_secret_skips_explanations(
 
 @needs_bash
 @pytest.mark.parametrize(
-    ("explain", "package"), [("true", "/action[anthropic]"), ("false", "/action")]
+    ("explain", "provider", "installed"),
+    [
+        ("true", "anthropic", ["/action", "/action[anthropic]"]),
+        ("true", "openai-compatible", ["/action"]),
+        ("true", "", ["/action"]),
+        ("false", "anthropic", ["/action"]),
+    ],
 )
-def test_the_anthropic_package_is_installed_only_for_explanations(
-    tmp_path: Path, explain: str, package: str
+def test_the_anthropic_package_is_installed_only_when_needed(
+    tmp_path: Path, explain: str, provider: str, installed: list[str]
 ) -> None:
-    # A "python" that prints what it was asked to install.
-    fake_program(tmp_path / "bin", "python", 'echo "$@"\n')
+    # A "python" that names the provider when asked (python -c ...), and
+    # otherwise prints the package it was asked to install.
+    fake_program(
+        tmp_path / "bin",
+        "python",
+        """
+        if [ "$1" = "-c" ]; then echo "$FAKE_PROVIDER"; exit 0; fi
+        for last; do :; done
+        echo "installed: $last"
+        """,
+    )
 
     completed = run_step(
         "Install SecureLint",
@@ -488,7 +503,14 @@ def test_the_anthropic_package_is_installed_only_for_explanations(
         PYTHON=str(tmp_path / "bin" / "python"),
         ACTION_PATH="/action",
         EXPLAIN=explain,
+        SCAN_PATH=".",
+        FAKE_PROVIDER=provider,
     )
 
-    assert completed.returncode == 0
-    assert completed.stdout.split()[-1] == package
+    assert completed.returncode == 0, completed.stderr
+    packages = [
+        line.removeprefix("installed: ")
+        for line in completed.stdout.splitlines()
+        if line.startswith("installed: ")
+    ]
+    assert packages == installed

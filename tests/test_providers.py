@@ -8,6 +8,7 @@ leaves the machine or costs money.
 import json
 import sys
 import threading
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,7 +20,7 @@ import pytest
 
 from securelint import providers
 from securelint.cli import main
-from securelint.config import AISettings, ConfigError, load_config
+from securelint.config import AISettings, ConfigError, ai_provider, load_config
 from securelint.prompt import Prompt
 from securelint.providers import (
     AnthropicExplainer,
@@ -47,10 +48,20 @@ class Service:
     first: list[tuple[int, dict[str, str]]] = field(default_factory=list)
     """Statuses (with headers) answered first, one per request, before the
     usual answer: to play a busy service."""
+    slow: list[float] = field(default_factory=list)
+    """Seconds to wait before answering, one per request: to play a slow
+    service."""
 
     def answer(self, document: Any, status: int = 200) -> None:
         self.status = status
         self.body = json.dumps(document).encode()
+
+
+class QuietServer(ThreadingHTTPServer):
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # A client that stopped waiting (the timeout tests) closes the
+        # connection before the answer is written: expected, not an error.
+        pass
 
 
 @pytest.fixture
@@ -64,6 +75,8 @@ def service() -> Iterator[Service]:
             # Header names in lower case: their case is not part of HTTP.
             sent = {name.lower(): value for name, value in self.headers.items()}
             state.requests.append((self.path, sent, body))
+            if state.slow:
+                time.sleep(state.slow.pop(0))
             status, headers, answer = state.status, state.headers, state.body
             if state.first:
                 status, headers = state.first.pop(0)
@@ -79,7 +92,7 @@ def service() -> Iterator[Service]:
         def log_message(self, *args: Any) -> None:
             pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = QuietServer(("127.0.0.1", 0), Handler)
     # Stopping the server never waits for a connection a client left open.
     server.daemon_threads = True
     server.block_on_close = False
@@ -530,3 +543,58 @@ def test_a_wrong_setting_is_never_retried(service: Service, status: int) -> None
 
     assert len(service.requests) == 1
     assert waits.seconds == []
+
+
+# A slow service is asked once more; a second slow answer is the end.
+
+
+def test_one_slow_answer_is_asked_again(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(providers, "TIMEOUT", 0.3)
+    service.answer(completion())
+    service.slow = [1.0]
+    waits = Waits()
+
+    text = busy_explainer(service, waits).explain(PROMPT)
+
+    assert text == ANSWER
+    assert len(service.requests) == 2
+    # Asked again at once: the timeout has already been a long wait.
+    assert waits.seconds == []
+
+
+def test_two_slow_answers_give_up(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(providers, "TIMEOUT", 0.3)
+    service.answer(completion())
+    service.slow = [1.0, 1.0]
+
+    with pytest.raises(ProviderError, match="timed out"):
+        busy_explainer(service, Waits()).explain(PROMPT)
+
+    assert len(service.requests) == 2
+
+
+# Which provider the settings name, read without checking the rest.
+
+
+@pytest.mark.parametrize(
+    ("content", "provider"),
+    [
+        ('[tool.securelint.ai]\nprovider = "anthropic"\n', "anthropic"),
+        ('[tool.securelint.ai]\nprovider = "openai-compatible"\n', "openai-compatible"),
+        ("[tool.securelint]\n", None),
+        ("[tool.securelint.ai]\nprovider = 3\n", None),
+        ("not [valid toml", None),
+    ],
+)
+def test_the_named_provider(tmp_path: Path, content: str, provider: str | None) -> None:
+    (tmp_path / "pyproject.toml").write_text(content, encoding="utf-8")
+
+    assert ai_provider(tmp_path) == provider
+
+
+def test_no_settings_name_no_provider(tmp_path: Path) -> None:
+    assert ai_provider(tmp_path) is None

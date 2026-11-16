@@ -17,6 +17,10 @@ What changed in each version of SecureLint, newest first.
   trust, the attacks it was built against with the test behind each
   protection, and the remaining risks. A test fails if a named test
   disappears. `SECURITY.md` says how to report a vulnerability privately.
+- The Action installs Anthropic's package only when the project's settings
+  choose the `anthropic` provider, not for every `explain: "true"`.
+- An OpenAI-compatible service that does not answer within 60 seconds is
+  asked once more, at once; a second slow answer ends the attempt.
 
 ## 0.6.0 (2026-11-15)
 

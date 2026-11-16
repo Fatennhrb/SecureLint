@@ -13,6 +13,10 @@ What changed in each version of SecureLint, newest first.
   Bandit on four real projects (Flask, Requests, HTTPie, Jinja):
   SecureLint 6 findings with 1 false alarm, Bandit 20 with 15.
   `benchmarks/real_projects.py` lists the findings again for any folder.
+- `docs/threat-model.md` lists what SecureLint protects, what it does not
+  trust, the attacks it was built against with the test behind each
+  protection, and the remaining risks. A test fails if a named test
+  disappears. `SECURITY.md` says how to report a vulnerability privately.
 
 ## 0.6.0 (2026-11-15)
 

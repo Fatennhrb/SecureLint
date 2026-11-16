@@ -592,6 +592,14 @@ and not a promise. The very first scan of files the system has not read
 recently is much slower (131 s when version 0.1.0 was measured), because the
 time then goes to reading from the disk.
 
+## Security
+
+SecureLint reads code that may be hostile and can send a few lines to an AI.
+The [threat model](docs/threat-model.md) lists what it protects, what it does
+not trust, the attacks it was built against with the test that checks each
+protection, and the risks that remain, such as a pull request silencing its
+own findings. To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

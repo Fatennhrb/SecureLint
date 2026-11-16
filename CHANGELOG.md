@@ -9,6 +9,10 @@ What changed in each version of SecureLint, newest first.
   kinds of problems both look for. The README shows the results and what
   they leave out: the corpus favours SecureLint, and Bandit does better on
   hard-coded secrets.
+- `docs/real-projects.md` sorts by hand every finding of SecureLint and
+  Bandit on four real projects (Flask, Requests, HTTPie, Jinja):
+  SecureLint 6 findings with 1 false alarm, Bandit 20 with 15.
+  `benchmarks/real_projects.py` lists the findings again for any folder.
 
 ## 0.6.0 (2026-11-15)
 

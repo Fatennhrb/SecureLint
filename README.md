@@ -535,6 +535,18 @@ How to read these numbers:
 Lines are compared by statement, so a call written over several lines counts
 once, whichever of its lines a tool names.
 
+### On real projects
+
+On code it was never written for (the shipped packages of Flask, Requests,
+HTTPie and Jinja, at fixed releases), SecureLint reported 6 findings in 146
+files: 2 real risks (Jinja loading its bytecode cache with `pickle` and
+`marshal`), 3 dangerous-by-design cases worth knowing about, and 1 false
+alarm. Bandit, on the same five kinds of problems, reported the same 5 plus
+15 false alarms, mostly variables named `token` or `password` set to `None`.
+Every finding, the verdict on it and its reason are in
+[docs/real-projects.md](docs/real-projects.md), with what this check cannot
+show: it counts false alarms, not misses.
+
 ## How fast is it?
 
 Measured by scanning Python's own standard library with all five rules

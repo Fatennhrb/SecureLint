@@ -2,7 +2,10 @@
 
 What changed in each version of SecureLint, newest first.
 
-## Unreleased
+## 0.6.0 (2026-11-15)
+
+AI explanations: a few plain words under each finding, from the AI the
+project chooses, without ever changing what blocks.
 
 - `scan --explain` adds a short explanation, written by an AI, under each
   finding shown (at most 10), in the text and JSON reports. It is added
@@ -33,6 +36,17 @@ What changed in each version of SecureLint, newest first.
   removed and long answers are cut. Explanations are shown, labelled "AI
   explanation (may be wrong)", in the text, JSON and HTML reports and in the
   GitHub notes, never in the job summary.
+- Tested for real with Gemini's free tier (`gemini-3.5-flash-lite`, through
+  the `openai-compatible` provider), on the laptop and in GitHub Actions on
+  [securelint-demo pull request #1](https://github.com/Fatennhrb/securelint-demo/pull/1).
+  The Claude provider is tested against Anthropic's real package and a fake
+  service, not yet with a real key.
+- The corpus numbers are unchanged (54 reported, 9 missed, 4 reported by
+  mistake).
+
+Known limits: the Action installs Anthropic's package whenever `explain` is
+on, even for another provider; a request that times out is not retried; on
+Gemini's free tier Google may use what is sent, so it suits made-up code only.
 
 ## 0.5.0 (2026-11-15)
 

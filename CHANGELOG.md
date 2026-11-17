@@ -26,6 +26,11 @@ What changed in each version of SecureLint, newest first.
   addresses so they also work on PyPI. A new CI job builds the package,
   checks it with `twine check --strict`, and installs it in an empty
   environment to use it from outside the repository.
+- A Release workflow publishes with PyPI's Trusted Publishing (no password
+  or token stored anywhere) and digital attestations: by hand to TestPyPI
+  as a rehearsal, and on a `v*` tag to TestPyPI then PyPI, after checking
+  that the tag matches the package version. `docs/releasing.md` explains
+  the one-time setup and the steps of a release.
 
 ## 0.6.0 (2026-11-15)
 

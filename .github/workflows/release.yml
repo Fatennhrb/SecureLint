@@ -1,0 +1,116 @@
+name: Release
+
+# Publishes SecureLint with PyPI's Trusted Publishing: GitHub proves to PyPI
+# which repository and workflow is asking, so no password or token is stored
+# anywhere.
+#
+#   - Started by hand (Actions > Release > Run workflow): a rehearsal that
+#     publishes to TestPyPI only.
+#   - A tag such as v1.0.0: publishes to TestPyPI, then to PyPI.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+# Nothing here writes to the repository. The publishing jobs get the one
+# extra permission they need, and nothing else does.
+permissions:
+  contents: read
+
+# Never two releases at once, and never one cancelled halfway.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Build and check the package
+        run: |
+          python -m pip install "build==1.6.1" "twine==7.0.0"
+          python -m build
+          python -m twine check --strict dist/*
+
+      - name: Check that the version matches the tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -u
+          wheel=$(ls dist/*.whl)
+          version=$(basename "$wheel" | cut -d - -f 2)
+          echo "Package version: $version"
+          if [ "$REF_TYPE" = "tag" ] && [ "$TAG" != "v$version" ]; then
+            echo "::error::The tag $TAG does not match the package version $version"
+            exit 1
+          fi
+
+      - name: Keep the package for the publishing jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  testpypi:
+    name: Publish to TestPyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/securelint
+    permissions:
+      # Lets GitHub prove to TestPyPI who is publishing (Trusted Publishing).
+      id-token: write
+    steps:
+      - name: Get the package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        # v1.14.3 fixes GHSA-5xjx-3w67-w9x9 (critical, October 2026).
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          # A rehearsal can be run again for the same version.
+          skip-existing: true
+
+  pypi:
+    name: Publish to PyPI
+    # Only for a tag, and only after TestPyPI accepted the same files.
+    if: github.ref_type == 'tag'
+    needs: testpypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/securelint
+    permissions:
+      # Lets GitHub prove to PyPI who is publishing (Trusted Publishing).
+      id-token: write
+    steps:
+      - name: Get the package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        # v1.14.3 fixes GHSA-5xjx-3w67-w9x9 (critical, October 2026).
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

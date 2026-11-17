@@ -1,6 +1,7 @@
 /**
  * Checks Python files with SecureLint when they are opened or saved, and
- * shows what it finds as squiggles and in the Problems panel.
+ * shows what it finds as squiggles and in the Problems panel. It also
+ * keeps each file's state, so Lint's panel can show it.
  *
  * The file on disk is scanned, so the squiggles match the saved text.
  */
@@ -8,7 +9,7 @@
 import * as vscode from "vscode";
 
 import type { Problem, ProblemLevel } from "./report";
-import { scanFile } from "./scan";
+import { type FileState, scanFile } from "./scan";
 
 const LEVELS: Readonly<Record<ProblemLevel, vscode.DiagnosticSeverity>> = {
   error: vscode.DiagnosticSeverity.Error,
@@ -20,9 +21,19 @@ export class Checker implements vscode.Disposable {
   private readonly diagnostics = vscode.languages.createDiagnosticCollection("securelint");
   /** The scan running for each file, so a newer save can stop it. */
   private readonly running = new Map<string, AbortController>();
+  private readonly states = new Map<string, FileState>();
+  private readonly changed = new vscode.EventEmitter<vscode.Uri>();
   private warnedNotFound = false;
 
+  /** Fires with a file's address when its state changes. */
+  readonly onDidChangeState = this.changed.event;
+
   constructor(private readonly log: vscode.LogOutputChannel) {}
+
+  /** The state of a file, or undefined if it is not checked. */
+  stateOf(uri: vscode.Uri): FileState | undefined {
+    return this.states.get(uri.toString());
+  }
 
   /** Start following open and saved Python files. */
   start(): vscode.Disposable[] {
@@ -35,6 +46,8 @@ export class Checker implements vscode.Disposable {
       vscode.workspace.onDidCloseTextDocument((document) => {
         this.stop(document.uri);
         this.diagnostics.delete(document.uri);
+        this.states.delete(document.uri.toString());
+        this.changed.fire(document.uri);
       }),
     ];
   }
@@ -47,6 +60,7 @@ export class Checker implements vscode.Disposable {
     this.stop(document.uri);
     const controller = new AbortController();
     this.running.set(key, controller);
+    this.setState(document.uri, { kind: "checking" });
 
     const command = vscode.workspace
       .getConfiguration("securelint")
@@ -56,32 +70,33 @@ export class Checker implements vscode.Disposable {
       file: document.uri.fsPath,
       signal: controller.signal,
     });
-    if (this.running.get(key) === controller) {
-      this.running.delete(key);
+    if (outcome.kind === "cancelled") {
+      // A newer check of the same file has taken over.
+      return;
     }
+    this.running.delete(key);
 
+    const name = vscode.workspace.asRelativePath(document.uri);
     switch (outcome.kind) {
       case "done":
         this.diagnostics.set(
           document.uri,
           outcome.problems.map((problem) => toDiagnostic(document, problem)),
         );
-        this.log.info(
-          `${vscode.workspace.asRelativePath(document.uri)}: ${String(outcome.problems.length)} problem(s)`,
-        );
-        break;
-      case "cancelled":
+        this.log.info(`${name}: ${String(outcome.problems.length)} problem(s)`);
         break;
       case "not-found":
+        this.diagnostics.delete(document.uri);
         this.log.warn(`Could not start "${outcome.command}".`);
         this.warnNotFound(outcome.command);
         break;
       case "failed":
         // Old squiggles may point at lines that have moved since.
         this.diagnostics.delete(document.uri);
-        this.log.error(`${vscode.workspace.asRelativePath(document.uri)}: ${outcome.message}`);
+        this.log.error(`${name}: ${outcome.message}`);
         break;
     }
+    this.setState(document.uri, outcome);
   }
 
   dispose(): void {
@@ -90,6 +105,12 @@ export class Checker implements vscode.Disposable {
     }
     this.running.clear();
     this.diagnostics.dispose();
+    this.changed.dispose();
+  }
+
+  private setState(uri: vscode.Uri, state: FileState): void {
+    this.states.set(uri.toString(), state);
+    this.changed.fire(uri);
   }
 
   private stop(uri: vscode.Uri): void {
@@ -111,17 +132,20 @@ export class Checker implements vscode.Disposable {
   }
 }
 
-function toDiagnostic(document: vscode.TextDocument, problem: Problem): vscode.Diagnostic {
+/** Turn a SecureLint line (from 1) into a range in the document. */
+export function lineRange(document: vscode.TextDocument, lineNumber: number, column = 0): vscode.Range {
   // SecureLint counts lines and columns from 1, VS Code from 0.
-  const lineIndex = Math.min(problem.line, document.lineCount) - 1;
+  const lineIndex = Math.min(Math.max(lineNumber, 1), document.lineCount) - 1;
   const line = document.lineAt(lineIndex);
   const start =
-    problem.column > 0
-      ? Math.min(problem.column - 1, line.text.length)
-      : line.firstNonWhitespaceCharacterIndex;
+    column > 0 ? Math.min(column - 1, line.text.length) : line.firstNonWhitespaceCharacterIndex;
   const end = line.text.length > start ? line.text.length : start + 1;
+  return new vscode.Range(lineIndex, start, lineIndex, end);
+}
+
+function toDiagnostic(document: vscode.TextDocument, problem: Problem): vscode.Diagnostic {
   const diagnostic = new vscode.Diagnostic(
-    new vscode.Range(lineIndex, start, lineIndex, end),
+    lineRange(document, problem.line, problem.column),
     problem.message,
     LEVELS[problem.level],
   );

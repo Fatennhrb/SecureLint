@@ -4,5 +4,5 @@
     "outDir": "out",
     "noEmit": false
   },
-  "include": ["src/panel.ts", "test"]
+  "include": ["test"]
 }

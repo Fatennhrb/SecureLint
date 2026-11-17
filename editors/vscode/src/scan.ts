@@ -27,6 +27,11 @@ export type ScanOutcome =
   | { readonly kind: "cancelled" }
   | { readonly kind: "failed"; readonly message: string };
 
+/** What is known about a file: being checked, or how its last check ended. */
+export type FileState =
+  | { readonly kind: "checking" }
+  | Exclude<ScanOutcome, { readonly kind: "cancelled" }>;
+
 export interface ScanRequest {
   /** The program to start, for example "securelint". */
   readonly command: string;

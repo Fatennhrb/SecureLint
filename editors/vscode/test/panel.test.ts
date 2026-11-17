@@ -1,4 +1,6 @@
 import * as assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   type Answer,
@@ -6,8 +8,12 @@ import {
   ASK_COMMAND,
   COPY_FIX_COMMAND,
   escapeHtml,
+  isSafeDrawing,
   lintPanelHtml,
+  type Mood,
+  MOODS,
   PANEL_COMMANDS,
+  type PanelResources,
   type PanelView,
   REVEAL_COMMAND,
   SILENCE_COMMAND,
@@ -43,15 +49,17 @@ function answered(answer: Answer): PanelView {
   };
 }
 
-const SOURCE = "https://file+.vscode-resource.vscode-cdn.net";
-const resources = {
-  cspSource: SOURCE,
-  images: {
-    clean: `${SOURCE}/media/lint-clean.svg`,
-    thinking: `${SOURCE}/media/lint-thinking.svg`,
-    problem: `${SOURCE}/media/lint-problem.svg`,
-  },
+// Lint's real drawings, from the extension's media folder (tests run from
+// out/test, two folders below the extension).
+function drawing(mood: Mood): string {
+  return readFileSync(join(__dirname, "..", "..", "media", `lint-${mood}.svg`), "utf8");
+}
+const DRAWINGS: Record<Mood, string> = {
+  clean: drawing("clean"),
+  thinking: drawing("thinking"),
+  problem: drawing("problem"),
 };
+const resources: PanelResources = { drawings: DRAWINGS, still: false };
 const URI = "file:///c%3A/demo/risky.py";
 
 function fileView(state: FileState | undefined, name = "risky.py"): PanelView {
@@ -70,10 +78,12 @@ function problem(fields: Partial<Problem> = {}): Problem {
 }
 
 function lintShown(html: string): string {
-  const match = /<img src="[^"]*\/lint-(\w+)\.svg" alt="([^"]*)">/.exec(html);
+  const match = /<div class="lint" data-mood="(\w+)">(<svg[\s\S]*?<\/svg>)\s*<\/div>/.exec(html);
   assert.ok(match, "the page does not show Lint");
-  assert.equal(match[2], { clean: "Lint, all clean", thinking: "Lint, thinking", problem: "Lint, found a problem" }[match[1] ?? ""]);
-  return match[1] ?? "";
+  const mood = (match[1] ?? "") as Mood;
+  // The drawing shown is the mood's own file, as it is.
+  assert.equal(match[2], DRAWINGS[mood].trim());
+  return mood;
 }
 
 function title(html: string): string {
@@ -136,7 +146,7 @@ describe("Lint's panel", () => {
   it("links a problem to its line, Ask Lint and Silence this", () => {
     const html = lintPanelHtml(resources, fileView({ kind: "done", problems: [problem()] }));
     assert.deepEqual(linksOf(html), [
-      { command: REVEAL_COMMAND, args: [URI, 6], label: "Line 6 · SL102" },
+      { command: REVEAL_COMMAND, args: [URI, 6], label: "Error: Line 6 · SL102" },
       { command: ASK_COMMAND, args: [URI, 6], label: "Ask Lint" },
       { command: SILENCE_COMMAND, args: [URI, 6, "SL102"], label: "Silence this" },
     ]);
@@ -245,14 +255,74 @@ describe("Lint's panel", () => {
     it(`runs no script and loads nothing from the network (${what})`, () => {
       const html = lintPanelHtml(resources, view);
       const policy = /http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html)?.[1] ?? "";
-      assert.ok(policy.startsWith("default-src 'none'"));
-      assert.ok(policy.includes(`img-src ${SOURCE}`));
-      assert.ok(!policy.includes("script-src"));
+      assert.equal(policy, "default-src 'none'; style-src 'unsafe-inline'");
       assert.ok(!html.includes("<script"));
       assert.ok(!/\son\w+=/.test(html));
-      assert.ok(!/(src|href)="https?:\/\/(?!file\+\.vscode-resource)/.test(html));
+      assert.ok(!/\ssrc=/.test(html));
+      assert.ok(!/href="(?!command:)/.test(html));
     });
   }
+});
+
+describe("Lint on dark themes", () => {
+  it("gets a light circle behind it, so its dark hood stays visible", () => {
+    const html = lintPanelHtml(resources, { kind: "idle" });
+    assert.match(
+      html,
+      /\.vscode-dark \.lint, \.vscode-high-contrast:not\(\.vscode-high-contrast-light\) \.lint \{/,
+    );
+  });
+});
+
+describe("Lint's motion", () => {
+  it("moves by default", () => {
+    const html = lintPanelHtml(resources, { kind: "idle" });
+    assert.ok(html.includes("<body>"));
+  });
+
+  it("stays still when VS Code is asked to reduce motion", () => {
+    const html = lintPanelHtml({ ...resources, still: true }, { kind: "idle" });
+    assert.ok(html.includes('<body class="still">'));
+    assert.ok(html.includes(".still .lint * { animation: none !important; }"));
+  });
+
+  it("each drawing also stops by itself when the system asks for less motion", () => {
+    for (const mood of MOODS) {
+      assert.match(DRAWINGS[mood], /@media \(prefers-reduced-motion:reduce\)\{[^}]*animation:none\}/);
+    }
+  });
+});
+
+describe("isSafeDrawing", () => {
+  it("accepts Lint's drawings", () => {
+    for (const mood of MOODS) {
+      assert.ok(isSafeDrawing(DRAWINGS[mood]), mood);
+    }
+  });
+
+  const unsafe: [string, string][] = [
+    ["a script", '<svg><script>alert(1)</script></svg>'],
+    ["an event handler", '<svg onload="alert(1)"></svg>'],
+    ["a link", '<svg><a href="https://x">x</a></svg>'],
+    ["an outside picture", '<svg><image href="https://x/y.png"/></svg>'],
+    ["a style from elsewhere", "<svg><style>@import 'https://x/y.css';</style></svg>"],
+    ["a url() in a style", "<svg><style>g{fill:url(https://x)}</style></svg>"],
+    ["HTML inside", "<svg><foreignObject><div>x</div></foreignObject></svg>"],
+    ["something that is not an SVG", "<div>Lint</div>"],
+  ];
+  for (const [what, svg] of unsafe) {
+    it(`refuses ${what}`, () => {
+      assert.ok(!isSafeDrawing(svg));
+    });
+  }
+
+  it("shows no drawing rather than an unsafe one", () => {
+    const html = lintPanelHtml(
+      { drawings: { ...DRAWINGS, clean: '<svg onload="alert(1)"></svg>' }, still: false },
+      { kind: "idle" },
+    );
+    assert.ok(html.includes('<div class="lint" data-mood="clean"></div>'));
+  });
 });
 
 describe("escapeHtml", () => {

@@ -2,10 +2,11 @@
  * The page shown in Lint's panel. Kept apart from the VS Code API so it
  * can be tested on its own.
  *
- * The page runs no script, and its Content Security Policy only lets it
- * load images from the extension itself: nothing from the network, and no
- * code. A problem in the list is a link to one command of ours, the only
- * one the panel may run, which jumps to the problem's line.
+ * The page runs no script, and its Content Security Policy lets it load
+ * nothing at all: no code, nothing from the network. Lint's drawing is put
+ * in the page itself (it is the extension's own SVG file, with no script),
+ * so the page can stop its motion when VS Code is asked to reduce motion.
+ * The links in the list may only run the panel's own commands.
  */
 
 import type { Explanation, Problem, ProblemLevel } from "./report";
@@ -35,10 +36,10 @@ export function answerKey(line: number, rule: string): string {
 }
 
 export interface PanelResources {
-  /** The source VS Code gives the webview for the extension's files. */
-  readonly cspSource: string;
-  /** Where the webview can load each of Lint's drawings from. */
-  readonly images: { readonly clean: string; readonly thinking: string; readonly problem: string };
+  /** Lint's drawings: the text of the SVG files in the media folder. */
+  readonly drawings: Readonly<Record<Mood, string>>;
+  /** True when VS Code is asked to reduce motion: Lint then stays still. */
+  readonly still: boolean;
 }
 
 /** What the panel shows: nothing to check, or the file being edited. */
@@ -56,13 +57,21 @@ export type PanelView =
       readonly answers?: ReadonlyMap<string, Answer>;
     };
 
-type Mood = "clean" | "thinking" | "problem";
+export type Mood = "clean" | "thinking" | "problem";
 
-const ALT: Readonly<Record<Mood, string>> = {
-  clean: "Lint, all clean",
-  thinking: "Lint, thinking",
-  problem: "Lint, found a problem",
-};
+export const MOODS: readonly Mood[] = ["clean", "thinking", "problem"];
+
+/**
+ * Whether an SVG text is safe to put in the page: an SVG that runs
+ * nothing, links nowhere and loads nothing. Lint's drawings always are (a
+ * test checks it); anything else is not shown.
+ */
+export function isSafeDrawing(svg: string): boolean {
+  return (
+    svg.trimStart().startsWith("<svg") &&
+    !/<script|<foreignObject|\son\w+\s*=|href|url\(|@import/i.test(svg)
+  );
+}
 
 const LEVEL_NAME: Readonly<Record<ProblemLevel, string>> = {
   error: "Error",
@@ -73,11 +82,8 @@ const LEVEL_NAME: Readonly<Record<ProblemLevel, string>> = {
 /** Return the HTML of Lint's panel for what is happening now. */
 export function lintPanelHtml(resources: PanelResources, view: PanelView): string {
   const { mood, title, hint, list } = content(view);
-  const policy = [
-    "default-src 'none'",
-    `img-src ${escapeHtml(resources.cspSource)}`,
-    "style-src 'unsafe-inline'",
-  ].join("; ");
+  const policy = ["default-src 'none'", "style-src 'unsafe-inline'"].join("; ");
+  const drawing = resources.drawings[mood];
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,16 +95,26 @@ body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size
   color: var(--vscode-foreground); padding: 12px 8px; }
 header { display: flex; flex-direction: column; align-items: center; gap: 6px;
   text-align: center; margin-bottom: 12px; }
-img { width: 96px; height: 96px; }
+.lint, .lint svg { width: 96px; height: 96px; }
+/* VS Code marks dark themes on the page. Lint's hood is dark, so a soft
+   light circle behind it keeps it visible there. */
+.vscode-dark .lint, .vscode-high-contrast:not(.vscode-high-contrast-light) .lint {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0 58%, transparent 70%); }
+.still .lint * { animation: none !important; }
 h1 { font-size: 1.1em; margin: 0; font-weight: 600; }
 p { margin: 0; }
 .hint { color: var(--vscode-descriptionForeground); }
+.message, .answer, code { overflow-wrap: anywhere; }
 ul { list-style: none; margin: 0; padding: 0; }
 li { padding: 6px 8px; border-radius: 4px; }
-li + li { border-top: 1px solid var(--vscode-widget-border, transparent); }
-a { color: var(--vscode-textLink-foreground); text-decoration: none; }
-a:hover, a:focus { text-decoration: underline; outline: none; }
+li + li { border-top: 1px solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent)); }
+a { color: var(--vscode-textLink-foreground); text-decoration: none; border-radius: 2px; }
+a:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+a:focus { outline: none; }
+a:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
 a.where { display: block; color: inherit; font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .actions { margin-top: 4px; }
 .busy { color: var(--vscode-descriptionForeground); font-style: italic; }
 .failed { margin-top: 4px; color: var(--vscode-errorForeground); }
@@ -115,9 +131,9 @@ a.where { display: block; color: inherit; font-weight: 600; }
 code { font-family: var(--vscode-editor-font-family); }
 </style>
 </head>
-<body>
+<body${resources.still ? ' class="still"' : ""}>
 <header>
-<img src="${escapeHtml(resources.images[mood])}" alt="${ALT[mood]}">
+<div class="lint" data-mood="${mood}">${isSafeDrawing(drawing) ? drawing : ""}</div>
 <h1 role="status">${title}</h1>
 ${hint === "" ? "" : `<p class="hint">${hint}</p>`}
 </header>
@@ -197,7 +213,7 @@ function problemList(
     const rule = problem.code === "" ? "" : ` · ${escapeHtml(problem.code)}`;
     const answer = problem.code === "" ? undefined : answers.get(answerKey(problem.line, problem.code));
     return `<li>
-<a class="where" href="${commandLink(REVEAL_COMMAND, [uri, problem.line])}"><span class="level ${problem.level}" title="${LEVEL_NAME[problem.level]}"></span>Line ${String(problem.line)}${rule}</a>
+<a class="where" href="${commandLink(REVEAL_COMMAND, [uri, problem.line])}"><span class="level ${problem.level}" title="${LEVEL_NAME[problem.level]}"></span><span class="sr">${LEVEL_NAME[problem.level]}: </span>Line ${String(problem.line)}${rule}</a>
 <p class="message">${escapeHtml(problem.message)}</p>
 ${problem.code === "" ? "" : actions(uri, problem, answer)}
 </li>`;

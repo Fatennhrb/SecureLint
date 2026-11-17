@@ -17,6 +17,8 @@ import {
   COPY_FIX_COMMAND,
   lintPanelHtml,
   PANEL_COMMANDS,
+  type Mood,
+  MOODS,
   type PanelView,
   REVEAL_COMMAND,
   SILENCE_COMMAND,
@@ -42,6 +44,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.onDidChangeActiveTextEditor(() => {
       panel.refresh();
     }),
+    vscode.workspace.onDidChangeConfiguration((change) => {
+      if (change.affectsConfiguration(REDUCE_MOTION)) {
+        panel.refresh();
+      }
+    }),
     checker.onDidChangeState(refreshIfActive),
     asker.onDidChangeAnswers(refreshIfActive),
     vscode.commands.registerCommand(REVEAL_COMMAND, (uri: unknown, line: unknown) =>
@@ -66,23 +73,30 @@ export function deactivate(): void {
   // Nothing to clean up: VS Code disposes of what was registered.
 }
 
+/** VS Code's setting for less motion: "on", "off", or "auto" (the system's). */
+const REDUCE_MOTION = "workbench.reduceMotion";
+
 class LintViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
+  /** Lint's drawings, read once from the media folder. */
+  private drawings: Record<Mood, string> = { clean: "", thinking: "", problem: "" };
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly checker: Checker,
     private readonly asker: Asker,
-  ) {}
+  ) {
+    void this.readDrawings();
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
     view.webview.options = {
-      // The page runs no script, may only read the media folder, and its
-      // links may only run the panel's own commands.
+      // The page runs no script and loads no file (Lint is drawn in the
+      // page), and its links may only run the panel's own commands.
       enableScripts: false,
       enableCommandUris: PANEL_COMMANDS,
-      localResourceRoots: [this.media()],
+      localResourceRoots: [],
     };
     view.onDidDispose(() => {
       this.view = undefined;
@@ -95,16 +109,20 @@ class LintViewProvider implements vscode.WebviewViewProvider {
     if (this.view === undefined) {
       return;
     }
-    const webview = this.view.webview;
-    const image = (mood: string): string =>
-      webview.asWebviewUri(vscode.Uri.joinPath(this.media(), `lint-${mood}.svg`)).toString();
-    webview.html = lintPanelHtml(
-      {
-        cspSource: webview.cspSource,
-        images: { clean: image("clean"), thinking: image("thinking"), problem: image("problem") },
-      },
-      this.currentView(),
-    );
+    // "auto" is left to the drawings themselves, which stay still when the
+    // system asks for less motion.
+    const still = vscode.workspace.getConfiguration().get<string>(REDUCE_MOTION) === "on";
+    this.view.webview.html = lintPanelHtml({ drawings: this.drawings, still }, this.currentView());
+  }
+
+  private async readDrawings(): Promise<void> {
+    const media = vscode.Uri.joinPath(this.extensionUri, "media");
+    const decoder = new TextDecoder();
+    for (const mood of MOODS) {
+      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(media, `lint-${mood}.svg`));
+      this.drawings = { ...this.drawings, [mood]: decoder.decode(bytes) };
+    }
+    this.refresh();
   }
 
   private currentView(): PanelView {

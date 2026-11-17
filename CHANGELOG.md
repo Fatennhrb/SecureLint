@@ -2,7 +2,12 @@
 
 What changed in each version of SecureLint, newest first.
 
-## Unreleased
+## 1.0.0 (2026-11-16)
+
+Measured, threat-modelled and installable: `pip install securelint`. The
+README's Stability section lists what stays the same across 1.x (commands,
+exit codes, JSON and SARIF formats, rule ids, fingerprints, settings and the
+Action's inputs).
 
 - `benchmarks/compare_bandit.py` runs SecureLint and Bandit 1.9.4 on the
   annotated corpus and scores both the same way, by statement, for the five
@@ -30,7 +35,16 @@ What changed in each version of SecureLint, newest first.
   or token stored anywhere) and digital attestations: by hand to TestPyPI
   as a rehearsal, and on a `v*` tag to TestPyPI then PyPI, after checking
   that the tag matches the package version. `docs/releasing.md` explains
-  the one-time setup and the steps of a release.
+  the one-time setup and the steps of a release. A rehearsal published 0.6.0
+  to TestPyPI with attestations naming this repository and workflow.
+- The README explains installing from PyPI and what is stable in 1.x.
+- The corpus numbers are unchanged (54 reported, 9 missed, 4 reported by
+  mistake).
+
+Known limits: the rules find five kinds of problems in Python code, not all
+security problems; a pull request can silence its own findings, which is
+visible but not blocked (see the threat model); there is no size limit on
+scanned files.
 
 ## 0.6.0 (2026-11-15)
 

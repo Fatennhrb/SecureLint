@@ -13,7 +13,7 @@ requires-python = ">=3.11"
 authors = [{ name = "Faten Harbaoui" }]
 keywords = ["security", "static analysis", "linter", "sast", "ci", "github actions"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",

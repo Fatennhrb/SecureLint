@@ -3,19 +3,34 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
-**Status:** version 0.6.0. `securelint scan` finds the Python files in a
+**Status:** version 1.0.0. `securelint scan` finds the Python files in a
 project, parses them and checks them against the five rules listed below,
 following values through variables, then writes a text, JSON, HTML or SARIF
 report. It can add the vulnerable dependencies and unsafe Dockerfile settings
 that Trivy found, and short explanations written by the AI the project
 chooses. A project can set which findings block, silence a checked finding,
 and accept the problems it already has while stopping new ones. As a GitHub
-Action, it reports findings on the lines a pull request changed. See the
-[changelog](https://github.com/Fatennhrb/SecureLint/blob/main/CHANGELOG.md) for what each version contains.
+Action, it reports findings on the lines a pull request changed. What stays
+the same across 1.x is listed under [Stability](#stability). See the
+[changelog](https://github.com/Fatennhrb/SecureLint/blob/main/CHANGELOG.md)
+for what each version contains.
 
-## Requirements
+## Installation
 
-- Python 3.11 or newer
+SecureLint needs Python 3.11 or newer, and nothing else:
+
+```bash
+pip install securelint
+securelint scan
+```
+
+For explanations by Claude (see
+[Explaining findings with an AI](#explaining-findings-with-an-ai)), install
+Anthropic's package with it: `pip install "securelint[anthropic]"`.
+
+Every release on PyPI is published by this repository's
+[Release workflow](https://github.com/Fatennhrb/SecureLint/blob/main/.github/workflows/release.yml)
+with digital attestations, which show that the files were built here.
 
 ## Development setup
 
@@ -219,7 +234,7 @@ jobs:
         with:
           fetch-depth: 0 # the whole history, to find the changed lines
           persist-credentials: false
-      - uses: Fatennhrb/SecureLint@v0.6.0 # pin the commit in real use
+      - uses: Fatennhrb/SecureLint@v1.0.0 # pin the commit in real use
 ```
 
 On a pull request, SecureLint reports the findings on the lines the pull
@@ -268,7 +283,7 @@ the one set up in the project's settings; its key comes from a repository
 secret, given to the step under the name the settings use:
 
 ```yaml
-      - uses: Fatennhrb/SecureLint@v0.6.0 # pin the commit in real use
+      - uses: Fatennhrb/SecureLint@v1.0.0 # pin the commit in real use
         with:
           explain: "true"
         env:
@@ -282,8 +297,8 @@ usual. Each explained finding is a paid request to the provider, unless it has
 a free tier or runs on your own machine. Anthropic's package is installed only
 when the project's settings choose the `anthropic` provider.
 
-The Action installs SecureLint from its own files, so `@v0.6.0` always runs
-SecureLint 0.6.0. The `trivy` input exists from version 0.5.0, and `explain`
+The Action installs SecureLint from its own files, so `@v1.0.0` always runs
+SecureLint 1.0.0. The `trivy` input exists from version 0.5.0, and `explain`
 from 0.6.0. Settings, silencing comments, the baseline and the policy are read
 from the scanned project as usual.
 
@@ -552,19 +567,23 @@ show: it counts false alarms, not misses.
 
 ## How fast is it?
 
-Measured by scanning Python's own standard library with all five rules
-(`python benchmarks/scan_speed.py`), keeping the fastest of five runs:
+Measured by scanning Python's own standard library, 3,659 files and 58.6 MB,
+with all five rules (`python benchmarks/scan_speed.py`), keeping the fastest
+of five runs:
 
-| | Version 0.1.0 | Version 0.2.0 | Version 0.3.0 | Version 0.4.0 | Version 0.5.0 | Version 0.6.0 |
-|---|---|---|---|---|---|---|
-| Code scanned | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB | 3,659 files, 58.6 MB |
-| Time | 12.25 s | 11.64 s | 14.06 s | 11.68 s | 11.77 s | 11.91 s |
-| Speed | 299 files per second | 314 files per second | 260 files per second | 313 files per second | 311 files per second | 307 files per second |
-| Measured on | 2026-11-12 | 2026-11-13 | 2026-11-14 | 2026-11-15 | 2026-11-15 | 2026-11-15 |
+| Version | Time | Speed | Measured on |
+|---------|-----:|------:|-------------|
+| 0.1.0 | 12.25 s | 299 files per second | 2026-11-12 |
+| 0.2.0 | 11.64 s | 314 files per second | 2026-11-13 |
+| 0.3.0 | 14.06 s | 260 files per second | 2026-11-14 |
+| 0.4.0 | 11.68 s | 313 files per second | 2026-11-15 |
+| 0.5.0 | 11.77 s | 311 files per second | 2026-11-15 |
+| 0.6.0 | 11.91 s | 307 files per second | 2026-11-15 |
+| 1.0.0 | 11.68 s | 313 files per second | 2026-11-16 |
 
 All were measured on the same laptop with Python 3.13.5 on Windows 11.
 
-The laptop itself was slower on 2026-11-14, so the 0.3.0 column cannot be
+The laptop itself was slower on 2026-11-14, so the 0.3.0 row cannot be
 compared with the others. Version 0.2.0 was timed again that day, right
 after version 0.3.0, and took 15.36 s. Measured side by side, version 0.3.0 is
 therefore not slower than version 0.2.0. Its new features (settings, silencing
@@ -585,6 +604,9 @@ two are as fast as each other. Explanations are asked for only with
 `--explain`, after the scan, so the time they take is the AI's answer time,
 not the scan's.
 
+Version 0.6.0 was timed again right after version 1.0.0 and took 11.86 s: the
+two are as fast as each other, as expected, since 1.0.0 changed no rule.
+
 Version 0.2.0 does more work for each file, because it follows values through
 variables, yet it is not slower. A first attempt at that feature walked every
 file twice and took 25 s; this benchmark showed it, and the two walks were
@@ -594,6 +616,40 @@ This is one laptop, so the numbers are a reference point for later versions
 and not a promise. The very first scan of files the system has not read
 recently is much slower (131 s when version 0.1.0 was measured), because the
 time then goes to reading from the disk.
+
+## Stability
+
+From version 1.0.0, SecureLint follows [semantic versioning](https://semver.org).
+Within 1.x, these stay as they are, so a CI job or a program built on them
+keeps working; only a 2.0.0 may change them:
+
+- **The commands and options**: `securelint scan` with `--format`,
+  `--no-baseline`, `--changed-since`, `--trivy-report` and `--explain`;
+  `securelint baseline` with `--trivy-report`; `securelint --version`.
+- **The exit codes**: 0 nothing blocks, 1 something blocks, 2 the scan could
+  not be completed.
+- **The JSON report** (`format_version` 1): no field is removed or renamed;
+  new fields may be added.
+- **The SARIF report**: SARIF 2.1.0, with the `securelint/v1` fingerprints.
+- **The rule ids** and what each one is about: `SL001`, `SL101` to `SL105`,
+  `SL201` and `SL202`.
+- **The fingerprints**: the same code gives the same fingerprint, so a
+  baseline file keeps working after an update.
+- **The settings** in `[tool.securelint]`, `[tool.securelint.policy]` and
+  `[tool.securelint.ai]`, and the silencing comment
+  `# securelint: ignore[SLxxx] reason`.
+- **The GitHub Action's inputs**: `path`, `changed-only`, `sarif-file`,
+  `python-version`, `trivy` and `explain`.
+
+Not promised, because improving them is the point of new versions:
+
+- **Which lines are reported.** A rule that gets better finds new problems
+  and drops false alarms, so a minor version can report findings an older
+  one did not. The baseline keeps those from failing a project at once.
+- The wording of messages, the layout of the text and HTML reports and of
+  the job summary, and the text of AI explanations.
+- The measured numbers in this README (detection, speed), which are measured
+  again for each version.
 
 ## Security
 

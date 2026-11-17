@@ -1,18 +1,26 @@
 /**
  * SecureLint for VS Code.
  *
- * For now it only shows Lint, the mascot, in its own panel. Later steps
- * run SecureLint on Python files and show what it finds.
+ * Checks Python files when they are opened or saved, shows what SecureLint
+ * finds as squiggles, and shows Lint, the mascot, in its own panel.
  */
 
 import * as vscode from "vscode";
 
+import { Checker } from "./checker";
 import { lintPanelHtml } from "./panel";
 
 export function activate(context: vscode.ExtensionContext): void {
-  const provider = new LintViewProvider(context.extensionUri);
+  const log = vscode.window.createOutputChannel("SecureLint", { log: true });
+  const checker = new Checker(log);
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider("securelint.lint", provider),
+    log,
+    checker,
+    ...checker.start(),
+    vscode.window.registerWebviewViewProvider(
+      "securelint.lint",
+      new LintViewProvider(context.extensionUri),
+    ),
   );
 }
 

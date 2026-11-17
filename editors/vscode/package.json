@@ -16,7 +16,24 @@
   "categories": ["Linters"],
   "activationEvents": ["onLanguage:python"],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "SecureLint runs a program on your files, so it only starts in folders you trust."
+    }
+  },
   "contributes": {
+    "configuration": {
+      "title": "SecureLint",
+      "properties": {
+        "securelint.executable": {
+          "type": "string",
+          "default": "securelint",
+          "scope": "machine",
+          "markdownDescription": "The SecureLint program to run, for example `securelint` or the full path to it. Only your own settings can change it, not a folder's settings."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {

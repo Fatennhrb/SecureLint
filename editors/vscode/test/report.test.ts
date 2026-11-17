@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 
-import { problemsFromReport, ReportError } from "../src/report";
+import { problemsFromReport, ReportError, splitExplanation } from "../src/report";
 
 function finding(fields: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -111,4 +111,48 @@ describe("problemsFromReport", () => {
       assert.throws(() => problemsFromReport(text), ReportError);
     });
   }
+});
+
+describe("explanations in a report", () => {
+  it("keeps the explanation SecureLint gave", () => {
+    const [problem] = problemsFromReport(
+      report({ findings: [finding({ explanation: "Because SL101. Fix: Use ast.literal_eval." })] }),
+    );
+    assert.equal(problem?.explanation, "Because SL101. Fix: Use ast.literal_eval.");
+  });
+
+  it("has no explanation when none was asked for", () => {
+    const [problem] = problemsFromReport(report({ findings: [finding()] }));
+    assert.ok(problem !== undefined && !("explanation" in problem));
+  });
+
+  it("refuses an explanation that is not text", () => {
+    assert.throws(
+      () => problemsFromReport(report({ findings: [finding({ explanation: 5 })] })),
+      ReportError,
+    );
+  });
+});
+
+describe("splitExplanation", () => {
+  it("splits the why from the fix", () => {
+    assert.deepEqual(splitExplanation("The shell runs it. Fix: Pass a list."), {
+      text: "The shell runs it.",
+      fix: "Pass a list.",
+    });
+  });
+
+  it("has an empty fix when the AI gave none", () => {
+    assert.deepEqual(splitExplanation("The shell runs it."), {
+      text: "The shell runs it.",
+      fix: "",
+    });
+  });
+
+  it("splits at the first fix only", () => {
+    assert.deepEqual(splitExplanation("Why. Fix: Do A. Fix: then B."), {
+      text: "Why.",
+      fix: "Do A. Fix: then B.",
+    });
+  });
 });

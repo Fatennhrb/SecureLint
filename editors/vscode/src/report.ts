@@ -19,6 +19,27 @@ export interface Problem {
   /** The rule, for example SL101; empty for a file that could not be read. */
   readonly code: string;
   readonly message: string;
+  /** The AI's explanation, only when SecureLint was asked for one. */
+  readonly explanation?: string;
+}
+
+/** An AI explanation split into its two parts. */
+export interface Explanation {
+  readonly text: string;
+  /** The fix the AI suggests; empty when it gave none. */
+  readonly fix: string;
+}
+
+/**
+ * Split an explanation into the "why" and the fix. SecureLint writes them
+ * as one line: "<why> Fix: <fix>", the fix being optional.
+ */
+export function splitExplanation(explanation: string): Explanation {
+  const at = explanation.indexOf(" Fix: ");
+  if (at === -1) {
+    return { text: explanation, fix: "" };
+  }
+  return { text: explanation.slice(0, at), fix: explanation.slice(at + " Fix: ".length).trim() };
 }
 
 export class ReportError extends Error {
@@ -89,13 +110,17 @@ function findingProblem(
   if (level === undefined) {
     throw new ReportError(`Unknown severity in SecureLint's report: ${severity}`);
   }
-  return {
+  const problem: Problem = {
     line: asLine(finding.line, "a finding's line"),
     column: finding.column === null ? 0 : asColumn(finding.column),
     level,
     code: asText(finding.rule_id, "a finding's rule"),
     message: asText(finding.message, "a finding's message"),
   };
+  if (finding.explanation === undefined || finding.explanation === null) {
+    return problem;
+  }
+  return { ...problem, explanation: asText(finding.explanation, "an explanation") };
 }
 
 function asObject(value: unknown, what: string): Record<string, unknown> {

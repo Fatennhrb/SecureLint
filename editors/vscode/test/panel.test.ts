@@ -1,8 +1,47 @@
 import * as assert from "node:assert/strict";
 
-import { escapeHtml, lintPanelHtml, type PanelView, REVEAL_COMMAND } from "../src/panel";
+import {
+  type Answer,
+  answerKey,
+  ASK_COMMAND,
+  COPY_FIX_COMMAND,
+  escapeHtml,
+  lintPanelHtml,
+  PANEL_COMMANDS,
+  type PanelView,
+  REVEAL_COMMAND,
+  SILENCE_COMMAND,
+} from "../src/panel";
 import type { Problem } from "../src/report";
 import type { FileState } from "../src/scan";
+
+interface PanelLink {
+  command: string;
+  args: unknown;
+  label: string;
+}
+
+/** Every link in the page: the command it runs, its arguments and its text. */
+function linksOf(html: string): PanelLink[] {
+  return [...html.matchAll(/<a[^>]*href="command:([^"?]*)\?([^"]*)"[^>]*>(.*?)<\/a>/g)].map(
+    (match) => ({
+      command: match[1] ?? "",
+      args: JSON.parse(decodeURIComponent(match[2] ?? "")) as unknown,
+      label: (match[3] ?? "").replace(/<[^>]*>/g, ""),
+    }),
+  );
+}
+
+/** A file with one SL102 problem on line 6, and this answer about it. */
+function answered(answer: Answer): PanelView {
+  return {
+    kind: "file",
+    name: "risky.py",
+    uri: URI,
+    state: { kind: "done", problems: [problem()] },
+    answers: new Map([[answerKey(6, "SL102"), answer]]),
+  };
+}
 
 const SOURCE = "https://file+.vscode-resource.vscode-cdn.net";
 const resources = {
@@ -94,13 +133,82 @@ describe("Lint's panel", () => {
     assert.equal(title(html), "1 problem in <code>risky.py</code>");
   });
 
-  it("links each problem to its line through the reveal command only", () => {
+  it("links a problem to its line, Ask Lint and Silence this", () => {
     const html = lintPanelHtml(resources, fileView({ kind: "done", problems: [problem()] }));
-    const links = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1] ?? "");
-    assert.equal(links.length, 1);
-    const [command, query] = (links[0] ?? "").split("?");
-    assert.equal(command, `command:${REVEAL_COMMAND}`);
-    assert.deepEqual(JSON.parse(decodeURIComponent(query ?? "")), [URI, 6]);
+    assert.deepEqual(linksOf(html), [
+      { command: REVEAL_COMMAND, args: [URI, 6], label: "Line 6 · SL102" },
+      { command: ASK_COMMAND, args: [URI, 6], label: "Ask Lint" },
+      { command: SILENCE_COMMAND, args: [URI, 6, "SL102"], label: "Silence this" },
+    ]);
+  });
+
+  it("offers no silencing for SL001, and no actions without a rule", () => {
+    const html = lintPanelHtml(
+      resources,
+      fileView({
+        kind: "done",
+        problems: [problem({ code: "SL001" }), problem({ line: 9, code: "" })],
+      }),
+    );
+    assert.deepEqual(
+      linksOf(html).map((item) => item.command),
+      [REVEAL_COMMAND, ASK_COMMAND, REVEAL_COMMAND],
+    );
+  });
+
+  it("thinks while Lint is asked about a problem", () => {
+    const html = lintPanelHtml(
+      resources,
+      answered({ kind: "asking" }),
+    );
+    assert.equal(lintShown(html), "thinking");
+    assert.ok(html.includes("Lint is thinking…"));
+    assert.ok(!linksOf(html).some((item) => item.command === ASK_COMMAND));
+  });
+
+  it("shows the answer, marked as possibly wrong, with Copy fix", () => {
+    const html = lintPanelHtml(
+      resources,
+      answered({
+        kind: "answered",
+        explanation: { text: "The shell runs it.", fix: "Use a list of arguments." },
+      }),
+    );
+    assert.equal(lintShown(html), "problem");
+    assert.ok(html.includes("AI explanation (may be wrong)"));
+    assert.ok(html.includes("<p>The shell runs it.</p>"));
+    assert.ok(html.includes("Use a list of arguments."));
+    const copy = linksOf(html).find((item) => item.command === COPY_FIX_COMMAND);
+    // The fix itself is never put in the link: the command looks it up.
+    assert.deepEqual(copy?.args, [URI, 6, "SL102"]);
+  });
+
+  it("has no Copy fix when the AI gave no fix", () => {
+    const html = lintPanelHtml(
+      resources,
+      answered({ kind: "answered", explanation: { text: "The shell runs it.", fix: "" } }),
+    );
+    assert.ok(!linksOf(html).some((item) => item.command === COPY_FIX_COMMAND));
+  });
+
+  it("shows why Lint could not answer, and lets you ask again", () => {
+    const html = lintPanelHtml(resources, answered({ kind: "failed", message: "no AI provider" }));
+    assert.ok(html.includes('<p class="failed">no AI provider</p>'));
+    assert.ok(linksOf(html).some((item) => item.label === "Ask again"));
+  });
+
+  it("escapes what the AI says", () => {
+    const html = lintPanelHtml(
+      resources,
+      answered({
+        kind: "answered",
+        explanation: { text: "<img src=x onerror=alert(1)>", fix: '<a href="command:evil">x</a>' },
+      }),
+    );
+    assert.ok(!html.includes("<img src=x"));
+    assert.ok(!html.includes('href="command:evil'));
+    assert.ok(html.includes("&lt;a href=&quot;command:evil&quot;&gt;"));
+    assert.ok(linksOf(html).every((item) => PANEL_COMMANDS.includes(item.command)));
   });
 
   it("explains how to install SecureLint when it is missing", () => {

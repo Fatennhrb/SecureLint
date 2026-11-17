@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { scanFile, type ScanRequest } from "../src/scan";
+import { errorDetail, explainLine, scanFile, type ScanRequest } from "../src/scan";
 
 // A stand-in for SecureLint: a small Node script, started with this Node.
 let folder = "";
@@ -103,5 +103,87 @@ describe("scanFile", () => {
     });
     controller.abort();
     assert.deepEqual(await running, { kind: "cancelled" });
+  });
+});
+
+describe("explainLine", () => {
+  before(() => {
+    folder = mkdtempSync(join(tmpdir(), "securelint-explain-"));
+  });
+
+  after(() => {
+    rmSync(folder, { recursive: true, force: true });
+  });
+
+  it("asks SecureLint to explain one line, in JSON", async () => {
+    const request = fake(
+      "explain-args",
+      `require("fs").writeFileSync(process.argv[1] + ".args", JSON.stringify(process.argv.slice(2)));
+       process.stdout.write(${JSON.stringify(CLEAN)});`,
+    );
+    await explainLine(request, 6);
+    const args = JSON.parse(readFileSync(join(folder, "explain-args.js.args"), "utf8")) as string[];
+    assert.deepEqual(args, ["explain", request.file, "--line", "6", "--format", "json"]);
+  });
+
+  it("returns the explanation SecureLint gave", async () => {
+    const report = JSON.stringify({
+      format_version: 1,
+      findings: [
+        {
+          rule_id: "SL101",
+          severity: "high",
+          line: 6,
+          column: 1,
+          message: "eval() runs its argument as Python code.",
+          explanation: "Because eval. Fix: Use ast.literal_eval.",
+        },
+      ],
+      warnings: [],
+      failures: [],
+    });
+    const outcome = await explainLine(fake("explained", `process.stdout.write(${JSON.stringify(report)});`), 6);
+    if (outcome.kind !== "done") assert.fail(`the question ended with ${outcome.kind}`);
+    assert.equal(outcome.problems[0]?.explanation, "Because eval. Fix: Use ast.literal_eval.");
+  });
+
+  it("says what went wrong, without the settings lines", async () => {
+    const outcome = await explainLine(
+      fake(
+        "no-ai",
+        `process.stderr.write("securelint: using settings from pyproject.toml\\n" +
+           "securelint: no explanations were added: no AI provider is set up\\n");
+         process.exitCode = 2;`,
+      ),
+      6,
+    );
+    assert.deepEqual(outcome, {
+      kind: "failed",
+      message: "SecureLint stopped with an error: no explanations were added: no AI provider is set up",
+    });
+  });
+
+  it("says when SecureLint is too old to explain", async () => {
+    const outcome = await explainLine(
+      fake(
+        "old",
+        `process.stderr.write("securelint: error: argument command: invalid choice: 'explain'");
+         process.exitCode = 2;`,
+      ),
+      6,
+    );
+    assert.deepEqual(outcome, {
+      kind: "failed",
+      message: "Asking Lint needs SecureLint 1.1.0 or newer: pip install -U securelint",
+    });
+  });
+});
+
+describe("errorDetail", () => {
+  it("keeps what went wrong and drops the rest", () => {
+    assert.equal(
+      errorDetail("securelint: using baseline x\r\nsecurelint: error: bad\n\n"),
+      "error: bad",
+    );
   });
 });

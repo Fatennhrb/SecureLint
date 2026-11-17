@@ -14,6 +14,12 @@ import { type Problem, problemsFromReport } from "./report";
 /** How long one scan may take before it is stopped. */
 export const SCAN_TIMEOUT_MS = 30_000;
 
+/**
+ * How long explaining one line may take: the AI may be asked again when it
+ * is busy or slow (see SecureLint's README), so this is much longer.
+ */
+export const EXPLAIN_TIMEOUT_MS = 180_000;
+
 /** The largest report read; a bigger one is refused. */
 const MAX_REPORT_BYTES = 10 * 1024 * 1024;
 
@@ -45,22 +51,35 @@ export interface ScanRequest {
 
 /** Scan one file. Never throws: every problem is an outcome. */
 export function scanFile(request: ScanRequest): Promise<ScanOutcome> {
-  const args = [...(request.prefixArgs ?? []), "scan", "--format", "json", request.file];
+  return run(request, ["scan", "--format", "json", request.file], SCAN_TIMEOUT_MS);
+}
+
+/**
+ * Ask SecureLint to explain the findings on one line, with the project's AI
+ * provider (`securelint explain`, from SecureLint 1.1.0). The problems
+ * returned are that line's, each with its explanation.
+ */
+export function explainLine(request: ScanRequest, line: number): Promise<ScanOutcome> {
+  const args = ["explain", request.file, "--line", String(line), "--format", "json"];
+  return run(request, args, EXPLAIN_TIMEOUT_MS);
+}
+
+function run(request: ScanRequest, args: string[], timeout: number): Promise<ScanOutcome> {
   return new Promise((resolve) => {
     execFile(
       request.command,
-      args,
+      [...(request.prefixArgs ?? []), ...args],
       {
         // SecureLint finds the project's settings from the file itself.
         cwd: path.dirname(request.file),
         encoding: "utf8",
-        timeout: SCAN_TIMEOUT_MS,
+        timeout,
         maxBuffer: MAX_REPORT_BYTES,
         windowsHide: true,
         ...(request.signal ? { signal: request.signal } : {}),
       },
       (error, stdout, stderr) => {
-        resolve(outcome(request.command, error, stdout, stderr));
+        resolve(outcome(request.command, timeout, error, stdout, stderr));
       },
     );
   });
@@ -68,6 +87,7 @@ export function scanFile(request: ScanRequest): Promise<ScanOutcome> {
 
 function outcome(
   command: string,
+  timeout: number,
   error: (Error & { code?: unknown; killed?: boolean }) | null,
   stdout: string,
   stderr: string,
@@ -81,12 +101,18 @@ function outcome(
   if (error?.killed === true) {
     return {
       kind: "failed",
-      message: `SecureLint took longer than ${String(SCAN_TIMEOUT_MS / 1000)} seconds and was stopped.`,
+      message: `SecureLint took longer than ${String(timeout / 1000)} seconds and was stopped.`,
     };
   }
   const exitCode = error === null ? EXIT_CLEAN : error.code;
   if (exitCode !== EXIT_CLEAN && exitCode !== EXIT_FINDINGS) {
-    const detail = stderr.trim() || error?.message || "no details";
+    if (stderr.includes("invalid choice: 'explain'")) {
+      return {
+        kind: "failed",
+        message: "Asking Lint needs SecureLint 1.1.0 or newer: pip install -U securelint",
+      };
+    }
+    const detail = errorDetail(stderr) || error?.message || "no details";
     return { kind: "failed", message: `SecureLint stopped with an error: ${detail}` };
   }
   try {
@@ -94,4 +120,16 @@ function outcome(
   } catch (problem) {
     return { kind: "failed", message: (problem as Error).message };
   }
+}
+
+/**
+ * What SecureLint said went wrong, without the lines that only say which
+ * settings or baseline it used.
+ */
+export function errorDetail(stderr: string): string {
+  return stderr
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^securelint:\s*/, "").trim())
+    .filter((line) => line !== "" && !line.startsWith("using "))
+    .join(" ");
 }

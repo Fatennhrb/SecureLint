@@ -8,11 +8,31 @@
  * one the panel may run, which jumps to the problem's line.
  */
 
-import type { Problem, ProblemLevel } from "./report";
+import type { Explanation, Problem, ProblemLevel } from "./report";
 import type { FileState } from "./scan";
 
-/** The command the panel's links run, with [file address, line]. */
+/** Jump to a problem, with [file address, line]. */
 export const REVEAL_COMMAND = "securelint.revealProblem";
+/** Ask the AI about a line, with [file address, line]. */
+export const ASK_COMMAND = "securelint.askLint";
+/** Copy the AI's fix, with [file address, line, rule]. */
+export const COPY_FIX_COMMAND = "securelint.copyFix";
+/** Add a silencing comment, with [file address, line, rule]. */
+export const SILENCE_COMMAND = "securelint.silence";
+
+/** The only commands the panel's links may run. */
+export const PANEL_COMMANDS = [REVEAL_COMMAND, ASK_COMMAND, COPY_FIX_COMMAND, SILENCE_COMMAND];
+
+/** What Lint knows about one problem after it was asked about it. */
+export type Answer =
+  | { readonly kind: "asking" }
+  | { readonly kind: "answered"; readonly explanation: Explanation }
+  | { readonly kind: "failed"; readonly message: string };
+
+/** The key of a problem's answer: one per rule on a line. */
+export function answerKey(line: number, rule: string): string {
+  return `${String(line)}:${rule}`;
+}
 
 export interface PanelResources {
   /** The source VS Code gives the webview for the extension's files. */
@@ -32,6 +52,8 @@ export type PanelView =
       readonly uri: string;
       /** Undefined while the file has not been checked yet. */
       readonly state: FileState | undefined;
+      /** What Lint was asked about, by `answerKey(line, rule)`. */
+      readonly answers?: ReadonlyMap<string, Answer>;
     };
 
 type Mood = "clean" | "thinking" | "problem";
@@ -72,11 +94,18 @@ h1 { font-size: 1.1em; margin: 0; font-weight: 600; }
 p { margin: 0; }
 .hint { color: var(--vscode-descriptionForeground); }
 ul { list-style: none; margin: 0; padding: 0; }
-li a { display: block; padding: 6px 8px; border-radius: 4px; color: inherit;
-  text-decoration: none; }
-li a:hover, li a:focus { background: var(--vscode-list-hoverBackground);
-  outline: 1px solid var(--vscode-focusBorder); }
-.where { font-weight: 600; }
+li { padding: 6px 8px; border-radius: 4px; }
+li + li { border-top: 1px solid var(--vscode-widget-border, transparent); }
+a { color: var(--vscode-textLink-foreground); text-decoration: none; }
+a:hover, a:focus { text-decoration: underline; outline: none; }
+a.where { display: block; color: inherit; font-weight: 600; }
+.actions { margin-top: 4px; }
+.busy { color: var(--vscode-descriptionForeground); font-style: italic; }
+.failed { margin-top: 4px; color: var(--vscode-errorForeground); }
+.answer { margin-top: 6px; padding: 6px 8px; border-left: 2px solid var(--vscode-textLink-foreground);
+  background: var(--vscode-textBlockQuote-background); }
+.answer p + p { margin-top: 4px; }
+.label { font-weight: 600; color: var(--vscode-descriptionForeground); }
 .level { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   margin-right: 6px; }
 .error { background: var(--vscode-editorError-foreground); }
@@ -144,25 +173,78 @@ function content(view: PanelView): Content {
           list: "",
         };
       }
+    {
+      const answers = view.answers ?? new Map<string, Answer>();
+      const thinking = [...answers.values()].some((answer) => answer.kind === "asking");
       return {
-        mood: "problem",
+        mood: thinking ? "thinking" : "problem",
         title: `${countProblems(state.problems.length)} in ${name}`,
-        hint: "Click one to go to its line.",
-        list: problemList(view.uri, state.problems),
+        hint: thinking
+          ? "Lint is asking the AI…"
+          : "Click a line to go to it, or ask Lint to explain a problem.",
+        list: problemList(view.uri, state.problems, answers),
       };
+    }
   }
 }
 
-function problemList(uri: string, problems: readonly Problem[]): string {
+function problemList(
+  uri: string,
+  problems: readonly Problem[],
+  answers: ReadonlyMap<string, Answer>,
+): string {
   const items = problems.map((problem) => {
-    const link = `command:${REVEAL_COMMAND}?${encodeURIComponent(JSON.stringify([uri, problem.line]))}`;
     const rule = problem.code === "" ? "" : ` · ${escapeHtml(problem.code)}`;
-    return `<li><a href="${escapeHtml(link)}">
-<span class="where"><span class="level ${problem.level}" title="${LEVEL_NAME[problem.level]}"></span>Line ${String(problem.line)}${rule}</span>
+    const answer = problem.code === "" ? undefined : answers.get(answerKey(problem.line, problem.code));
+    return `<li>
+<a class="where" href="${commandLink(REVEAL_COMMAND, [uri, problem.line])}"><span class="level ${problem.level}" title="${LEVEL_NAME[problem.level]}"></span>Line ${String(problem.line)}${rule}</a>
 <p class="message">${escapeHtml(problem.message)}</p>
-</a></li>`;
+${problem.code === "" ? "" : actions(uri, problem, answer)}
+</li>`;
   });
   return `<ul>\n${items.join("\n")}\n</ul>`;
+}
+
+function actions(uri: string, problem: Problem, answer: Answer | undefined): string {
+  const links: string[] = [];
+  let below = "";
+  switch (answer?.kind) {
+    case undefined:
+      links.push(link(ASK_COMMAND, [uri, problem.line], "Ask Lint"));
+      break;
+    case "asking":
+      links.push(`<span class="busy">Lint is thinking…</span>`);
+      break;
+    case "failed":
+      links.push(link(ASK_COMMAND, [uri, problem.line], "Ask again"));
+      below = `<p class="failed">${escapeHtml(answer.message)}</p>`;
+      break;
+    case "answered": {
+      const { text, fix } = answer.explanation;
+      if (fix !== "") {
+        links.push(link(COPY_FIX_COMMAND, [uri, problem.line, problem.code], "Copy fix"));
+      }
+      below =
+        `<div class="answer"><p class="label">AI explanation (may be wrong)</p>` +
+        `<p>${escapeHtml(text)}</p>` +
+        (fix === "" ? "" : `<p><span class="label">Fix:</span> ${escapeHtml(fix)}</p>`) +
+        `</div>`;
+      break;
+    }
+  }
+  if (problem.code !== "SL001") {
+    links.push(link(SILENCE_COMMAND, [uri, problem.line, problem.code], "Silence this"));
+  }
+  return `${below}\n<p class="actions">${links.join(" · ")}</p>`;
+}
+
+function link(command: string, args: readonly unknown[], label: string): string {
+  return `<a href="${commandLink(command, args)}">${label}</a>`;
+}
+
+/** A link that runs one of the panel's commands with these arguments. */
+function commandLink(command: string, args: readonly unknown[]): string {
+  return escapeHtml(`command:${command}?${encodeURIComponent(JSON.stringify(args))}`);
 }
 
 function countProblems(count: number): string {

@@ -101,7 +101,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Look for known vulnerabilities
-        run: npm audit
+        run: npm run audit
 
       - name: Type check, lint, test and bundle
         run: npm run check

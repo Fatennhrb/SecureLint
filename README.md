@@ -1,5 +1,9 @@
 # SecureLint
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Fatennhrb/SecureLint/main/assets/lint/lint-clean.svg" width="140" alt="Lint, SecureLint's mascot: a small hooded guardian with code-bracket arms, a cape and a shield">
+</p>
+
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 

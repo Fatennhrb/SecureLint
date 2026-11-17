@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200" role="img" aria-label="Lint, all clean">
+<title>Lint, all clean</title>
+<style>
+@keyframes blink{0%,94%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+@keyframes load{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-3px);opacity:1}}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:.25}}
+.eye{animation:blink 4s infinite;transform-box:fill-box;transform-origin:center}
+.dot{animation:load 1.2s ease-in-out infinite}
+.d2{animation-delay:.15s}.d3{animation-delay:.3s}
+.flash{animation:flash .8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.eye,.dot,.flash{animation:none}}
+</style>
+<g>
+<g stroke="#1E2433" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+<path d="M34 76 Q20 80 16 92 Q26 88 32 94 Q34 84 42 80 Z" fill="#1D9E75"/>
+<ellipse cx="50" cy="83" rx="17" ry="13" fill="#2E3A5C"/>
+<path d="M50 5 C64 5 90 36 90 53 C90 67 72 74 50 74 C28 74 10 67 10 53 C10 36 36 5 50 5 Z" fill="#2E3A5C"/>
+<path d="M41 13 C33 19 26 27 22 35" fill="none" stroke="#5A6C9C" stroke-width="2.5"/>
+<ellipse cx="50" cy="50" rx="28" ry="18" fill="#141A2B"/>
+</g>
+<path d="M18 40 L10 50 L18 60 M82 40 L90 50 L82 60" fill="none" stroke="#5DCAA5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="eye" cx="40" cy="49" r="6" fill="#5DCAA5"/><circle class="eye" cx="60" cy="49" r="6" fill="#5DCAA5"/>
+<circle class="eye" cx="42" cy="47" r="2" fill="#fff"/><circle class="eye" cx="62" cy="47" r="2" fill="#fff"/>
+<path d="M46 59 q4 3 8 0" fill="none" stroke="#5DCAA5" stroke-width="2" stroke-linecap="round"/>
+<path d="M50 78 l6 2 v5 c0 4 -3 6 -6 7 c-3 -1 -6 -3 -6 -7 v-5 z" fill="#9FE1CB"/>
+</g>
+</svg>

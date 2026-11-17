@@ -2,6 +2,13 @@
 
 What changed in each version of SecureLint, newest first.
 
+## Unreleased
+
+- Lint, SecureLint's mascot, in `assets/lint`: a small hooded guardian
+  with code-bracket arms, a cape and a shield, in three moods (all clean,
+  thinking, found a problem). Plain SVG files with no script and nothing
+  loaded from elsewhere; they stay still when "reduce motion" is on.
+
 ## 1.0.0 (2026-11-16)
 
 Measured, threat-modelled and installable: `pip install securelint`. The

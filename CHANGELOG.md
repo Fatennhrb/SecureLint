@@ -4,6 +4,11 @@ What changed in each version of SecureLint, newest first.
 
 ## Unreleased
 
+- `securelint explain FILE --line N` explains only the findings on one line
+  of one file, in text or in the same JSON format as `scan`. It goes through
+  the same settings, baseline and policy as a scan, sends nothing when the
+  line has no finding, and exits with 2 when a finding could not be
+  explained. Made for editors, where the cursor is on one line.
 - Lint, SecureLint's mascot, in `assets/lint`: a small hooded guardian
   with code-bracket arms, a cape and a shield, in three moods (all clean,
   thinking, found a problem). Plain SVG files with no script and nothing

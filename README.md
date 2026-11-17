@@ -424,6 +424,24 @@ What the AI can and cannot do:
   checks are kept, and the cache holds no code. The folder has its own
   `.gitignore`, so it is never committed; delete it to ask everything again.
 
+### Explaining one line
+
+`securelint explain FILE --line N` explains only the findings on one line of
+one file, for example the line an editor's cursor is on:
+
+```bash
+securelint explain app.py --line 12
+securelint explain app.py --line 12 --format json
+```
+
+The file goes through the same steps as with `scan` (settings, baseline,
+policy), so the findings explained are the ones a scan shows: silenced and
+known findings are not. The report, in text or in the same JSON format as
+`scan`, holds only that line's findings, each with its explanation. The exit
+code is 0 when every finding on the line was explained, or when the line has
+none (then nothing is sent), and 2 when one could not be explained or the file
+could not be scanned.
+
 ## Rules
 
 | ID | Severity | What it reports |
@@ -629,9 +647,11 @@ keeps working; only a 2.0.0 may change them:
 
 - **The commands and options**: `securelint scan` with `--format`,
   `--no-baseline`, `--changed-since`, `--trivy-report` and `--explain`;
-  `securelint baseline` with `--trivy-report`; `securelint --version`.
+  `securelint baseline` with `--trivy-report`; `securelint explain` with
+  `--line` and `--format` (from 1.1.0); `securelint --version`.
 - **The exit codes**: 0 nothing blocks, 1 something blocks, 2 the scan could
-  not be completed.
+  not be completed. For `explain`: 0 every finding on the line was explained,
+  2 one was not.
 - **The JSON report** (`format_version` 1): no field is removed or renamed;
   new fields may be added.
 - **The SARIF report**: SARIF 2.1.0, with the `securelint/v1` fingerprints.

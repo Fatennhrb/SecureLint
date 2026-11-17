@@ -126,6 +126,28 @@ def build_parser() -> argparse.ArgumentParser:
             "(from `trivy fs --format json` on the same folder)"
         ),
     )
+    explain_parser = commands.add_parser(
+        "explain",
+        help="explain the findings on one line of a file",
+        description=(
+            "Scan one Python file and ask the project's AI provider to explain "
+            "the findings on one line. The report holds only that line's "
+            "findings, each with its explanation."
+        ),
+    )
+    explain_parser.add_argument("file", type=Path, help="the Python file")
+    explain_parser.add_argument(
+        "--line",
+        type=_line_number,
+        required=True,
+        help="the line to explain, counted from 1",
+    )
+    explain_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="how to write the report (default: text)",
+    )
     baseline_parser = commands.add_parser(
         "baseline",
         help="record today's findings as known",
@@ -170,10 +192,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             trivy_report=args.trivy_report,
             explain=args.explain,
         )
+    if args.command == "explain":
+        return _run_explain(args.file, args.line, args.format)
     if args.command == "baseline":
         return _run_baseline(args.path, args.trivy_report)
     parser.print_help()
     return EXIT_CLEAN
+
+
+def _line_number(text: str) -> int:
+    """Read a line number for ``--line``: a whole number from 1."""
+    try:
+        number = int(text)
+    except ValueError:
+        number = 0
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"not a line number: {text!r}")
+    return number
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,6 +297,62 @@ def _run_scan(
         # here would let a problem pass unseen.
         return EXIT_ERROR
     return EXIT_FINDINGS if result.findings else EXIT_CLEAN
+
+
+def _run_explain(file: Path, line: int, report_format: str) -> int:
+    """Explain the findings on one line of one file.
+
+    The file goes through the same steps as with ``scan``: settings,
+    baseline, then policy, so the findings explained are the ones a scan
+    shows. Exit code 0 means every finding on the line was explained (or
+    there was none); 2 means one could not be, or the file could not be
+    scanned.
+    """
+    if not file.is_file():
+        _print_error(f"error: not a file: {file}")
+        return EXIT_ERROR
+    project = _find_project(file)
+    if project is None:
+        return EXIT_ERROR
+    try:
+        known = load_baseline(project.baseline_path)
+    except BaselineError as error:
+        _print_error(f"error: {error}")
+        return EXIT_ERROR
+
+    result = _scan_project(file, project)
+    if result is None:
+        return EXIT_ERROR
+    if result.failures:
+        _print_failures(result)
+        return EXIT_ERROR
+    if known is not None:
+        result = split_known(result, known)
+    result = apply_policy(result, project.config.policy)
+
+    # Only the line asked about. What is hidden or known is not shown, so it
+    # is not explained either.
+    result = replace(
+        result,
+        findings=tuple(item for item in result.findings if item.line == line),
+        warnings=tuple(item for item in result.warnings if item.line == line),
+        silenced=(),
+        known=(),
+        outside_change=(),
+    )
+    wanted = len(result.findings) + len(result.warnings)
+    if wanted == 0:
+        _print_error(f"nothing to explain: no finding on line {line}")
+    else:
+        result = _explain(result, project, file)
+
+    print(FORMATS[report_format](result))
+    if len(result.explanations) < wanted:
+        missing = wanted - len(result.explanations)
+        findings = "1 finding was" if missing == 1 else f"{missing} findings were"
+        _print_error(f"error: {findings} not explained")
+        return EXIT_ERROR
+    return EXIT_CLEAN
 
 
 def _run_baseline(place: Path, trivy_report: Path | None = None) -> int:

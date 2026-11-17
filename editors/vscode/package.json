@@ -1,0 +1,61 @@
+{
+  "name": "securelint",
+  "displayName": "SecureLint",
+  "description": "Security problems in your Python code, explained by Lint.",
+  "version": "0.1.0",
+  "publisher": "fatennhrb",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fatennhrb/SecureLint"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": ["Linters"],
+  "activationEvents": ["onLanguage:python"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "securelint",
+          "title": "SecureLint",
+          "icon": "media/lint-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "securelint": [
+        {
+          "type": "webview",
+          "id": "securelint.lint",
+          "name": "Lint"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --target=node20 --sourcemap",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "tsc -p tsconfig.test.json && mocha",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/mocha": "10.0.10",
+    "@types/node": "26.6.6",
+    "@types/vscode": "1.100.0",
+    "esbuild": "0.28.2",
+    "eslint": "10.15.0",
+    "mocha": "12.0.3",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.73.0"
+  },
+  "overrides": {
+    "glob": "14.0.6",
+    "minimatch": "11.0.9"
+  }
+}

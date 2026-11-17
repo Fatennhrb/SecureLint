@@ -74,6 +74,38 @@ jobs:
           # Also download the pinned Trivy, verify it and read its report.
           trivy: "true"
 
+  extension:
+    # The VS Code extension in editors/vscode: type check, lint, test and
+    # bundle it. Install scripts are turned off, so no package can run code
+    # while it is installed.
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - name: Install the exact locked tools
+        run: npm ci --ignore-scripts
+
+      - name: Look for known vulnerabilities
+        run: npm audit
+
+      - name: Type check, lint, test and bundle
+        run: npm run check
+
   package:
     # Builds the package the way it will be published, checks it as PyPI
     # will, and installs it in an empty environment to use it from outside

@@ -11,7 +11,7 @@ that Trivy found, and short explanations written by the AI the project
 chooses. A project can set which findings block, silence a checked finding,
 and accept the problems it already has while stopping new ones. As a GitHub
 Action, it reports findings on the lines a pull request changed. See the
-[changelog](CHANGELOG.md) for what each version contains.
+[changelog](https://github.com/Fatennhrb/SecureLint/blob/main/CHANGELOG.md) for what each version contains.
 
 ## Requirements
 
@@ -35,7 +35,7 @@ python -m pytest                  # tests
 ```
 
 GitHub Actions runs the same four checks on every push to `main` and on every
-pull request, on Python 3.11 and 3.14 (see [ci.yml](.github/workflows/ci.yml)).
+pull request, on Python 3.11 and 3.14 (see [ci.yml](https://github.com/Fatennhrb/SecureLint/blob/main/.github/workflows/ci.yml)).
 
 ## Usage
 
@@ -476,7 +476,7 @@ cursor.execute(query)
 ## How well does it detect?
 
 The rules are measured against a set of annotated example files in
-[tests/corpus](tests/corpus/README.md). Every dangerous line there is marked,
+[tests/corpus](https://github.com/Fatennhrb/SecureLint/blob/main/tests/corpus/README.md). Every dangerous line there is marked,
 including the ones SecureLint does not find yet.
 
 | | Count |
@@ -547,7 +547,7 @@ files: 2 real risks (Jinja loading its bytecode cache with `pickle` and
 alarm. Bandit, on the same five kinds of problems, reported the same 5 plus
 15 false alarms, mostly variables named `token` or `password` set to `None`.
 Every finding, the verdict on it and its reason are in
-[docs/real-projects.md](docs/real-projects.md), with what this check cannot
+[docs/real-projects.md](https://github.com/Fatennhrb/SecureLint/blob/main/docs/real-projects.md), with what this check cannot
 show: it counts false alarms, not misses.
 
 ## How fast is it?
@@ -598,11 +598,11 @@ time then goes to reading from the disk.
 ## Security
 
 SecureLint reads code that may be hostile and can send a few lines to an AI.
-The [threat model](docs/threat-model.md) lists what it protects, what it does
+The [threat model](https://github.com/Fatennhrb/SecureLint/blob/main/docs/threat-model.md) lists what it protects, what it does
 not trust, the attacks it was built against with the test that checks each
 protection, and the risks that remain, such as a pull request silencing its
-own findings. To report a vulnerability, see [SECURITY.md](SECURITY.md).
+own findings. To report a vulnerability, see [SECURITY.md](https://github.com/Fatennhrb/SecureLint/blob/main/SECURITY.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/Fatennhrb/SecureLint/blob/main/LICENSE).

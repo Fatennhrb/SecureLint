@@ -21,6 +21,11 @@ What changed in each version of SecureLint, newest first.
   choose the `anthropic` provider, not for every `explain: "true"`.
 - An OpenAI-compatible service that does not answer within 60 seconds is
   asked once more, at once; a second slow answer ends the attempt.
+- Ready for PyPI: the package now has classifiers, keywords and project
+  links, ships a `py.typed` marker, and the README's links are full
+  addresses so they also work on PyPI. A new CI job builds the package,
+  checks it with `twine check --strict`, and installs it in an empty
+  environment to use it from outside the repository.
 
 ## 0.6.0 (2026-11-15)
 

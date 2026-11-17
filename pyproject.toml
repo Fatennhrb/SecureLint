@@ -11,8 +11,31 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Faten Harbaoui" }]
+keywords = ["security", "static analysis", "linter", "sast", "ci", "github actions"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 # The scanner itself needs nothing outside the standard library.
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Fatennhrb/SecureLint"
+Documentation = "https://github.com/Fatennhrb/SecureLint#readme"
+Changelog = "https://github.com/Fatennhrb/SecureLint/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Fatennhrb/SecureLint/issues"
+Security = "https://github.com/Fatennhrb/SecureLint/blob/main/SECURITY.md"
 
 [project.optional-dependencies]
 # Explanations by Claude (`scan --explain` with provider = "anthropic").

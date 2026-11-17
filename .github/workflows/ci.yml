@@ -73,3 +73,40 @@ jobs:
         with:
           # Also download the pinned Trivy, verify it and read its report.
           trivy: "true"
+
+  package:
+    # Builds the package the way it will be published, checks it as PyPI
+    # will, and installs it in an empty environment to use it from outside
+    # the repository, as someone who ran `pip install securelint` would.
+    name: Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Build the package
+        run: |
+          python -m pip install "build==1.6.1" "twine==7.0.0"
+          python -m build
+          python -m twine check --strict dist/*
+
+      - name: Install it in an empty environment and use it
+        run: |
+          python -m venv "$RUNNER_TEMP/clean"
+          "$RUNNER_TEMP/clean/bin/python" -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/clean/bin/securelint" --version
+          printf 'print("safe")\n' > ok.py
+          "$RUNNER_TEMP/clean/bin/securelint" scan ok.py
+          printf 'eval(input())\n' > risky.py
+          status=0
+          "$RUNNER_TEMP/clean/bin/securelint" scan risky.py || status=$?
+          test "$status" -eq 1

@@ -66,3 +66,26 @@ describe("Lint's drawings", () => {
     assert.ok(!/#[0-9a-f]{3,6}\b/i.test(icon), "the icon should use currentColor only");
   });
 });
+
+describe("the package", () => {
+  it("has the same license as the repository", () => {
+    assert.equal(
+      readFileSync(join(extension, "LICENSE"), "utf8"),
+      readFileSync(join(repo, "LICENSE"), "utf8"),
+    );
+  });
+
+  it("keeps only what the extension needs to run", () => {
+    const kept = readFileSync(join(extension, ".vscodeignore"), "utf8")
+      .split(/\r?\n/)
+      .filter((line) => line !== "" && !line.startsWith("#"));
+    assert.deepEqual(kept, [
+      "**",
+      "!dist/extension.js",
+      "!media/**",
+      "!package.json",
+      "!README.md",
+      "!LICENSE",
+    ]);
+  });
+});

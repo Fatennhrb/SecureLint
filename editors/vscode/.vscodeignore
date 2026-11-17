@@ -1,0 +1,8 @@
+# Only what the extension needs to run goes in the package: the bundled
+# code, Lint's drawings, the manifest, the README and the license.
+**
+!dist/extension.js
+!media/**
+!package.json
+!README.md
+!LICENSE

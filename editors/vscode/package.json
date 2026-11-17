@@ -13,8 +13,12 @@
   "engines": {
     "vscode": "^1.100.0"
   },
-  "categories": ["Linters"],
-  "activationEvents": ["onLanguage:python"],
+  "categories": [
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:python"
+  ],
   "main": "./dist/extension.js",
   "capabilities": {
     "untrustedWorkspaces": {
@@ -58,14 +62,20 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "tsc -p tsconfig.test.json && mocha",
+    "test:vscode": "npm run build && tsc -p tsconfig.test.json && vscode-test",
     "audit": "node scripts/audit.mjs",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies --out securelint.vsix"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/mocha": "10.0.10",
     "@types/node": "26.6.6",
     "@types/vscode": "1.100.0",
+    "@vscode/test-cli": "0.0.15",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.1.0",
     "esbuild": "0.28.2",
     "eslint": "10.15.0",
     "mocha": "12.0.3",
@@ -74,6 +84,9 @@
   },
   "overrides": {
     "glob": "14.0.6",
-    "minimatch": "11.0.9"
+    "minimatch": "11.0.9",
+    "@vscode/test-cli": {
+      "mocha": "$mocha"
+    }
   }
 }

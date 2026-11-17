@@ -12,6 +12,7 @@ import * as vscode from "vscode";
 import { Asker } from "./asker";
 import { Checker, lineRange } from "./checker";
 import {
+  type Answer,
   answerKey,
   ASK_COMMAND,
   COPY_FIX_COMMAND,
@@ -23,9 +24,19 @@ import {
   REVEAL_COMMAND,
   SILENCE_COMMAND,
 } from "./panel";
+import type { FileState } from "./scan";
 import { REASON_PLACEHOLDER, RULE_ID, silenceEdit } from "./silence";
 
-export function activate(context: vscode.ExtensionContext): void {
+/**
+ * What the extension tells other code, read-only: used by the tests that
+ * run inside VS Code to wait for a check or an answer.
+ */
+export interface SecureLintApi {
+  stateOf(uri: vscode.Uri): FileState | undefined;
+  answersFor(uri: vscode.Uri): ReadonlyMap<string, Answer>;
+}
+
+export function activate(context: vscode.ExtensionContext): SecureLintApi {
   const log = vscode.window.createOutputChannel("SecureLint", { log: true });
   const checker = new Checker(log);
   const asker = new Asker(checker, log);
@@ -67,6 +78,10 @@ export function activate(context: vscode.ExtensionContext): void {
       providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
     }),
   );
+  return {
+    stateOf: (uri) => checker.stateOf(uri),
+    answersFor: (uri) => asker.answersFor(uri),
+  };
 }
 
 export function deactivate(): void {

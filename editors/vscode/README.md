@@ -28,11 +28,14 @@ squiggle.
 
 ## Requirements
 
-- SecureLint 1.1.0 or newer: `pip install -U securelint`. Squiggles work
-  with 1.0.0; Ask Lint needs 1.1.0.
+- **Security diagnostics:** Install the published scanner with
+  `pip install securelint` (v1.0.0).
+- **Ask Lint:** Requires the `securelint explain` command, currently
+  available on the development branch (`main`). This feature is not
+  included in the published PyPI v1.0.0 package.
 - For Ask Lint: an AI provider set up in the project's `pyproject.toml`, under
   `[tool.securelint.ai]`, with its key in an environment variable. See
-  [Explaining findings with an AI](https://github.com/Fatennhrb/SecureLint#explaining-findings-with-an-ai).
+  [Explaining findings with an AI](../../docs/ai-explanations.md#explaining-findings-with-an-ai)
 
 ## Settings
 

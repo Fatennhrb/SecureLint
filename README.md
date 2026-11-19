@@ -36,9 +36,12 @@
   </a>
 </p>
 
-<p align="center"><sub><strong>VS Code demo</strong> · Click to watch the real recording. The VS Code extension is experimental and currently available from the repository, not from PyPI 1.0.0.</sub></p>
+<p align="center">
+  <sub><strong>SecureLint for VS Code</strong> · Live security diagnostics, AI explanations, and Lint's interactive panel.</sub>
+</p>
 
-Two more real workflows, also available on demand (no endlessly looping GIFs on this page):
+### More demos
+Explore SecureLint through its CLI and GitHub Actions integration.
 
 | Terminal → HTML report | GitHub pull request review |
 |:---:|:---:|
@@ -94,7 +97,7 @@ The repository includes automated checks, an annotated test corpus, comparisons 
 | Scan benchmark (v1.0.0) | **11.68 s** | 3,659 Python standard-library files; one Windows laptop, fastest of five runs |
 | Real-project check | **4 projects** | Flask, Requests, HTTPie and Jinja; limited manual review of reported findings |
 
-The comparison corpus was developed alongside SecureLint's rules and favors its design choices. **Do not interpret its Bandit comparison as evidence of overall superiority**; Bandit covers many more checks. Read the complete [detection results and Bandit comparison](docs/evaluation.md), [performance table and methodology](docs/performance.md), and [real-project findings](docs/real-projects.md).
+The benchmark covers five security categories using a project-specific test corpus. Results reflect these test cases rather than overall tool performance, as Bandit supports a broader range of security checks. Read the complete [detection results and Bandit comparison](docs/evaluation.md), [performance table and methodology](docs/performance.md), and [real-project findings](docs/real-projects.md).
 
 ## Release status
 
@@ -106,7 +109,7 @@ The VS Code extension is **not on the Marketplace**. It can be built or installe
 
 ## Documentation
 
-Everything below is **one click away**. The long-form explanations, original tables and examples remain available in dedicated guides.
+Detailed documentation covering SecureLint's configuration, integrations, architecture, security analysis, benchmarks, and development workflows.
 
 | Topic | Guide |
 |:---|:---|
@@ -123,10 +126,12 @@ Everything below is **one click away**. The long-form explanations, original tab
 | Reproducible source code & extra evaluations | [Tests](tests/) · [Benchmarks](benchmarks/) · [Real-project analysis](docs/real-projects.md) |
 | Architecture, threat model and security reporting | [Architecture](docs/architecture.md) · [Threat model](docs/threat-model.md) · [Security policy](SECURITY.md) |
 | Changelog, release workflow and license | [Changelog](CHANGELOG.md) · [Releasing](docs/releasing.md) · [MIT license](LICENSE) |
-| Preserve the complete earlier documentation | [Original README snapshot (unchanged)](docs/archive/README-original-2026-11-18.md) |
 
 ---
 
 <p align="center">
-  Built as an independent software engineering project. · <a href="https://github.com/Fatennhrb/securelint-demo">Try the intentional-vulnerability demo</a> · <a href="https://pypi.org/project/securelint/">View on PyPI</a>
+  <a href="https://pypi.org/project/securelint/">PyPI</a> ·
+  <a href="https://github.com/Fatennhrb/securelint-demo">Live demos</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="LICENSE">MIT License</a>
 </p>

@@ -13,6 +13,15 @@ What changed in each version of SecureLint, newest first.
   with code-bracket arms, a cape and a shield, in three moods (all clean,
   thinking, found a problem). Plain SVG files with no script and nothing
   loaded from elsewhere; they stay still when "reduce motion" is on.
+- A VS Code extension in `editors/vscode`, with Lint in its own panel:
+  squiggles on save, the problems of the file being edited, Ask Lint (an AI
+  explanation through `securelint explain`), Copy fix and Silence this. Its
+  panel runs no script and loads nothing from the network, and it only
+  starts in trusted folders. CI tests it inside VS Code 1.100.0 and builds
+  `securelint.vsix`.
+- Three short demo clips in `assets/demo`, shown in the README: a scan in a
+  terminal with its HTML report, the demo pull requests on GitHub, and Lint
+  in VS Code.
 
 ## 1.0.0 (2026-11-16)
 

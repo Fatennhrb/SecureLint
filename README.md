@@ -7,6 +7,13 @@
 SecureLint is a security scanner and CI policy gate for Python projects.
 It is built step by step, and this README describes only what works today.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Fatennhrb/SecureLint/main/assets/demo/demo-vscode.gif" alt="In VS Code, Lint's panel is all clean; when the risky code comes back it shows 2 problems with red squiggles, explains each one with an AI answer, and turns green again once both lines are fixed and saved">
+</p>
+<p align="center"><em>Lint in VS Code: it finds two risky lines, explains them with an
+AI answer, and turns green once they are fixed.
+<a href="#vs-code-extension">More about the extension</a></em></p>
+
 **Status:** version 1.0.0. `securelint scan` finds the Python files in a
 project, parses them and checks them against the five rules listed below,
 following values through variables, then writes a text, JSON, HTML or SARIF
@@ -15,7 +22,9 @@ that Trivy found, and short explanations written by the AI the project
 chooses. A project can set which findings block, silence a checked finding,
 and accept the problems it already has while stopping new ones. As a GitHub
 Action, it reports findings on the lines a pull request changed. What stays
-the same across 1.x is listed under [Stability](#stability). See the
+the same across 1.x is listed under [Stability](#stability). A VS Code
+extension, with Lint as its guide, shows the findings while you edit (see
+[VS Code extension](#vs-code-extension)). See the
 [changelog](https://github.com/Fatennhrb/SecureLint/blob/main/CHANGELOG.md)
 for what each version contains.
 
@@ -68,6 +77,12 @@ securelint scan src/ --format html > report.html
 securelint scan --format sarif > securelint.sarif
 securelint scan --format github   # inside GitHub Actions
 ```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Fatennhrb/SecureLint/main/assets/demo/demo-terminal.gif" alt="In a terminal, securelint scan reports 5 problems in 2 files, the exit code is 1, then the same result opens as an HTML report in a browser">
+</p>
+<p align="center"><em>A scan finds 5 problems in 2 files and exits with 1, the code that
+fails a CI job; the same result as an HTML report.</em></p>
 
 `--format json` writes the same result as a JSON document for other programs
 to read: a summary, then every finding with its rule, severity, confidence,
@@ -256,6 +271,15 @@ known vulnerabilities in an old `requests`. The demo also explains its
 findings with Gemini's free tier, so the notes on pull request #1 each carry an
 AI explanation.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Fatennhrb/SecureLint/main/assets/demo/demo-pull-request.gif" alt="On GitHub, pull request #1 has a failed SecureLint check and notes with AI explanations on its changed lines; pull request #2 has notes from Trivy on its Dockerfile and requirements.txt">
+</p>
+<p align="center"><em>The two demo pull requests: notes with AI explanations on pull
+request #1, Trivy's findings on pull request #2. On pull request #1 each note
+appears twice: its commit was checked twice, before and after AI explanations
+were turned on, and GitHub keeps the notes of both checks. The second note of
+each pair carries the explanation.</em></p>
+
 | Input | Default | Meaning |
 |-------|---------|---------|
 | `path` | `.` | File or directory to scan. |
@@ -441,6 +465,47 @@ known findings are not. The report, in text or in the same JSON format as
 code is 0 when every finding on the line was explained, or when the line has
 none (then nothing is sent), and 2 when one could not be explained or the file
 could not be scanned.
+
+## VS Code extension
+
+The extension in
+[`editors/vscode`](https://github.com/Fatennhrb/SecureLint/tree/main/editors/vscode)
+runs SecureLint on the Python files you open and save, with Lint, the mascot,
+in its own panel:
+
+- **Squiggles on save.** Findings are underlined and listed in the Problems
+  panel: red for high and critical, yellow for medium, blue for low.
+- **Lint's panel.** Lint shows the problems of the file you are editing: all
+  clean, thinking while SecureLint works, or the problem list. Click a problem
+  to go to its line.
+- **Ask Lint.** A short explanation and fix from the project's AI provider,
+  marked "AI explanation (may be wrong)", with **Copy fix** to copy the fix.
+  It runs `securelint explain FILE --line N` (see
+  [Explaining one line](#explaining-one-line)), so it uses the same settings,
+  masking and cache.
+- **Silence this.** Adds `# securelint: ignore[SL102]` to the line, with a
+  placeholder for the reason.
+
+The panel runs no script and loads nothing from the network, the extension
+only starts in folders VS Code trusts, and Lint stays still when VS Code's
+Reduce Motion setting is on. Its tests run inside VS Code 1.100.0, the oldest
+version it supports, on every push.
+
+It is not on the VS Code Marketplace yet. Each CI run builds it as
+`securelint.vsix` (in the run's **securelint-vsix** artifact); install it with
+**Extensions > ... > Install from VSIX**, or build it yourself:
+
+```bash
+cd editors/vscode
+npm ci --ignore-scripts
+npm run package
+code --install-extension securelint.vsix
+```
+
+Squiggles work with SecureLint 1.0.0; Ask Lint needs `securelint explain`,
+which is in this repository and comes to PyPI with version 1.1.0. Its own
+[README](https://github.com/Fatennhrb/SecureLint/blob/main/editors/vscode/README.md)
+lists its setting and how it treats your code.
 
 ## Rules
 

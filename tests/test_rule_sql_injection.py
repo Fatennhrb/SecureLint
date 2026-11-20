@@ -97,3 +97,107 @@ def test_message_names_the_method_that_was_called(tmp_path: Path) -> None:
     (finding,) = findings_in(tmp_path, 'db.executescript(f"DROP TABLE {table}")\n')
 
     assert finding.message.startswith("executescript() is given an SQL query")
+
+
+@pytest.mark.parametrize(
+    ("code", "line"),
+    [
+        # Extended with +=.
+        (
+            "def find(cursor, name):\n"
+            '    query = "SELECT * FROM users"\n'
+            "    query += f\" WHERE name = '{name}'\"\n"
+            "    cursor.execute(query)\n",
+            4,
+        ),
+        # Extended in one branch only.
+        (
+            "def find(cursor, name, everyone):\n"
+            '    query = "SELECT * FROM users"\n'
+            "    if not everyone:\n"
+            '        query = query + " WHERE name = \'" + name + "\'"\n'
+            "    cursor.execute(query)\n",
+            5,
+        ),
+        # Column names added in a loop.
+        (
+            "def pick(cursor, columns):\n"
+            '    query = "SELECT id"\n'
+            "    for column in columns:\n"
+            '        query += ", " + column\n'
+            "    cursor.execute(query)\n",
+            5,
+        ),
+        # Built by a function in the same file.
+        (
+            "def find_user(name):\n"
+            "    return f\"SELECT * FROM users WHERE name = '{name}'\"\n"
+            "\n"
+            "def find(cursor, name):\n"
+            "    cursor.execute(find_user(name))\n",
+            5,
+        ),
+        # The same, through a variable.
+        (
+            "def find_user(name):\n"
+            "    return f\"SELECT * FROM users WHERE name = '{name}'\"\n"
+            "\n"
+            "def find(cursor, name):\n"
+            "    query = find_user(name)\n"
+            "    cursor.execute(query)\n",
+            6,
+        ),
+    ],
+)
+def test_reports_queries_built_in_pieces_or_by_a_function(
+    tmp_path: Path, code: str, line: int
+) -> None:
+    (finding,) = findings_in(tmp_path, code)
+
+    assert finding.line == line
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # Every piece is fixed.
+        (
+            "def find(cursor, user_id):\n"
+            '    query = "SELECT * FROM users"\n'
+            '    query += " WHERE id = ?"\n'
+            "    cursor.execute(query, (user_id,))\n"
+        ),
+        # The function returns a fixed query.
+        (
+            "def everyone():\n"
+            '    return "SELECT * FROM users"\n'
+            "\n"
+            "def find(cursor):\n"
+            "    cursor.execute(everyone())\n"
+        ),
+        # Not SQL, whatever the pieces.
+        (
+            "def run(executor, number):\n"
+            '    job = "job-"\n'
+            "    job += str(number)\n"
+            "    executor.execute(job)\n"
+        ),
+    ],
+)
+def test_does_not_report_fixed_pieces_or_fixed_returns(
+    tmp_path: Path, code: str
+) -> None:
+    assert findings_in(tmp_path, code) == ()
+
+
+def test_a_query_extended_many_times_is_read_quickly(tmp_path: Path) -> None:
+    # Each "query = query + ..." reads query again; it must not be read
+    # once per path through all the lines.
+    lines = "".join(f"    query = query + ' AND c{i} = ' + v{i}\n" for i in range(30))
+    start = "def f(cursor):\n    query = 'SELECT * FROM t WHERE 1 = 1'\n"
+    code = start + lines
+    code += "    cursor.execute(query)\n"
+
+    (finding,) = findings_in(tmp_path, code)
+
+    assert finding.line == 33

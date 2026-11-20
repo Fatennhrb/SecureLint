@@ -37,6 +37,28 @@ This is done only when the variable is assigned exactly once. A variable
 assigned twice, changed with `+=`, or received as a parameter has no single
 value, and is treated as before.
 
+SQL queries are also read when they are built in steps, or by a function in
+the same file. Both of these are reported:
+
+```python
+query = "SELECT * FROM users"
+query += f" WHERE name = '{name}'"
+cursor.execute(query)  # every "=" and "+=" of query is read
+
+
+def find_user(name):
+    return f"SELECT * FROM users WHERE name = '{name}'"
+
+
+cursor.execute(find_user(name))  # what find_user returns is read
+```
+
+A variable is read this way only when every value it gets comes from `=` or
+`+=`; a loop variable or a parameter among them stops it. A function is read
+only when it is defined once with `def`, has a single `return`, no decorator,
+and is not a generator or `async def`. A function imported from another file
+is not read.
+
 A value set once at the top of a file is known inside every function of that
 file, and fixed pieces put together are still fixed. None of these is reported:
 

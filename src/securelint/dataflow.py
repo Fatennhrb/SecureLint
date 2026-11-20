@@ -19,6 +19,27 @@ A variable that the function does not assign at all is looked for the way
 Python does it: in the functions around it, then at the top of the file.
 So ``TABLE = "users"`` written once at the top of a file is known inside
 every function of that file.
+
+Two more answers are kept apart from these certain values, for the rules
+that only need to know what text a value can contain:
+
+* The pieces of a name given its value only with ``=`` and ``+=``::
+
+      query = "SELECT * FROM users"
+      query += f" WHERE name = '{name}'"
+
+  ``query`` has no single value, but every piece of text it can hold is
+  known: the two right-hand sides.
+
+* What a function returns, when it has a single ``return``::
+
+      def find_user(name):
+          return f"SELECT * FROM users WHERE name = '{name}'"
+
+      cursor.execute(find_user(name))
+
+  ``find_user`` must be defined once with ``def`` in the same file, with no
+  decorator (which could replace it), and must not be a generator.
 """
 
 import ast
@@ -60,11 +81,51 @@ class _Scope:
     is_class: bool = False
     """A class body. Its variables are not visible from its methods."""
 
-    def bind(self, name: str, value: ast.expr | None = None) -> None:
+    pieces: dict[str, list[ast.expr]] = field(default_factory=dict)
+    """For each name, the right-hand side of every ``=`` and ``+=`` that
+    gives it a value."""
+
+    unpieced: set[str] = field(default_factory=set)
+    """Names also given a value some other way (a parameter, a loop, an
+    import, ``-=``...), so their pieces are not all known."""
+
+    functions: dict[str, ast.FunctionDef] = field(default_factory=dict)
+    """The functions defined here with ``def``, by name."""
+
+    returns: list[ast.Return] = field(default_factory=list)
+    """The ``return`` statements of this function itself, not of the
+    functions inside it."""
+
+    is_generator: bool = False
+    """The function contains ``yield``: calling it does not run its body."""
+
+    def bind(
+        self, name: str, value: ast.expr | None = None, piece: ast.expr | None = None
+    ) -> None:
         self.bindings.setdefault(name, []).append(value)
+        if piece is None:
+            self.unpieced.add(name)
+        else:
+            self.pieces.setdefault(name, []).append(piece)
 
 
-def analyse(tree: ast.Module) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
+@dataclass(frozen=True, slots=True)
+class OtherValues:
+    """What is known about variables and calls that have no single value."""
+
+    pieces: dict[ast.Name, tuple[ast.expr, ...]] = field(default_factory=dict)
+    """For a variable given its value only with ``=`` and ``+=``, more than
+    once, the right-hand side of each."""
+
+    returns: dict[ast.Name, ast.expr] = field(default_factory=dict)
+    """For the name of a function being called, the expression of its one
+    ``return``. Its parameters, read inside that expression, have no
+    known value."""
+
+
+def analyse(
+    tree: ast.Module,
+) -> tuple[list[ast.AST], dict[ast.Name, ast.expr], OtherValues]:
     """Walk a file once; return all its nodes and the values of its variables.
 
     The first result holds every node except the small markers that say
@@ -73,6 +134,9 @@ def analyse(tree: ast.Module) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
 
     The second result maps each place a variable is read to the expression
     it was given. Only reads with exactly one certain value are in it.
+
+    The third result holds the less certain answers described at the top
+    of this module: the pieces of a variable, and what a function returns.
 
     Both results come from the same walk because walking the tree is the
     most expensive part of a scan: doing it twice made scans twice as slow.
@@ -83,6 +147,9 @@ def analyse(tree: ast.Module) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
     # function, so no single scope shows everything that happens to them.
     shared: set[str] = set()
 
+    # The scope of each function, to find its "return" statements.
+    scope_of: dict[ast.AST, _Scope] = {}
+
     waiting: list[tuple[ast.AST, _Scope | None]] = [(tree, None)]
     while waiting:
         scope_node, parent = waiting.pop()
@@ -91,35 +158,57 @@ def analyse(tree: ast.Module) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
             scope.bind(parameter)
         _read_scope(scope_node, scope, shared, nodes, waiting)
         scopes.append(scope)
+        scope_of[scope_node] = scope
 
     values: dict[ast.Name, ast.expr] = {}
+    other = OtherValues()
     for scope in scopes:
         for read in scope.reads:
             if read.id in shared:
                 continue
-            value = _lookup(read.id, scope)
-            if value is not None:
-                values[read] = value
-    return nodes, values
+            owner = _owner(read.id, scope)
+            if owner is None:
+                continue
+            bound = owner.bindings[read.id]
+            if len(bound) == 1:
+                if bound[0] is not None:
+                    values[read] = bound[0]
+                    continue
+                returned = _single_return(owner.functions.get(read.id), scope_of)
+                if returned is not None:
+                    other.returns[read] = returned
+            elif read.id not in owner.unpieced:
+                other.pieces[read] = tuple(owner.pieces[read.id])
+    return nodes, values, other
 
 
-def _lookup(name: str, scope: _Scope) -> ast.expr | None:
-    """Find the one certain value of a name read in ``scope``, if it has one.
+def _owner(name: str, scope: _Scope) -> _Scope | None:
+    """Find the scope that gives a name read in ``scope`` its value.
 
     The scopes are tried in the order Python uses: the scope itself, then
     each scope around it. The first one that gives the name a value
-    decides, even when the answer is "not certain".
+    decides, even when that value is not certain.
     """
     current: _Scope | None = scope
     while current is not None:
         # A method does not see the variables of its class body; only code
         # written directly in the class body does.
-        if current is scope or not current.is_class:
-            bound = current.bindings.get(name)
-            if bound is not None:
-                return bound[0] if len(bound) == 1 else None
+        if (current is scope or not current.is_class) and name in current.bindings:
+            return current
         current = current.parent
     return None
+
+
+def _single_return(
+    function: ast.FunctionDef | None, scope_of: dict[ast.AST, _Scope]
+) -> ast.expr | None:
+    """Return the expression a function returns, if it has exactly one."""
+    if function is None or function.decorator_list:
+        return None
+    scope = scope_of[function]
+    if scope.is_generator or len(scope.returns) != 1:
+        return None
+    return scope.returns[0].value
 
 
 def collect_values(tree: ast.Module) -> dict[ast.Name, ast.expr]:
@@ -145,6 +234,8 @@ def _read_scope(
     # The value of each plain "name = value" target, filled just before
     # the target itself is visited.
     assigned: dict[ast.Name, ast.expr] = {}
+    # The same for "name += value": not the name's value, only a piece.
+    extended: dict[ast.Name, ast.expr] = {}
 
     # A list of statements, or one expression for a lambda.
     body = getattr(scope_node, "body", [])
@@ -161,8 +252,10 @@ def _read_scope(
             else:
                 # Every other way of storing into a name lands here with no
                 # known value: "+=", "for x in", "with ... as x", "a, b =",
-                # ":=", "del x".
-                scope.bind(node.id, assigned.get(node))
+                # ":=", "del x". Of these, only "+=" adds a known piece.
+                value = assigned.get(node)
+                piece = value if value is not None else extended.get(node)
+                scope.bind(node.id, value, piece)
         elif kind is ast.Assign:
             assert isinstance(node, ast.Assign)  # noqa: S101
             # "a = b = value" gives the same value to both.
@@ -173,12 +266,24 @@ def _read_scope(
             assert isinstance(node, ast.AnnAssign)  # noqa: S101
             if isinstance(node.target, ast.Name) and node.value is not None:
                 assigned[node.target] = node.value
+        elif kind is ast.AugAssign:
+            assert isinstance(node, ast.AugAssign)  # noqa: S101
+            if isinstance(node.target, ast.Name) and isinstance(node.op, ast.Add):
+                extended[node.target] = node.value
+        elif kind is ast.Return:
+            assert isinstance(node, ast.Return)  # noqa: S101
+            scope.returns.append(node)
+        elif kind is ast.Yield or kind is ast.YieldFrom:
+            scope.is_generator = True
         elif kind in _OTHER_BINDINGS:
             _bind_other(node, scope, shared)
 
         elif kind in _SCOPE_TYPES:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
                 scope.bind(node.name)
+            # Not "async def": calling one only creates a coroutine.
+            if isinstance(node, ast.FunctionDef):
+                scope.functions[node.name] = node
             waiting.append((node, scope))
 
         fields = _FIELDS_TO_FOLLOW.get(kind)

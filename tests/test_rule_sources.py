@@ -175,6 +175,37 @@ def test_value_made_harmless_is_not_called_user_input(
     assert "Here the value comes from" not in finding.message
 
 
+def test_source_found_in_what_is_given_to_a_function(tmp_path: Path) -> None:
+    code = (
+        "def find_user(name):\n"
+        "    return f\"SELECT * FROM users WHERE name = '{name}'\"\n"
+        "\n"
+        'cursor.execute(find_user(request.args["name"]))\n'
+    )
+
+    finding = finding_in(tmp_path, code)
+
+    assert finding.confidence is Confidence.HIGH
+    assert "Here the value comes from request.args" in finding.message
+
+
+def test_pieces_do_not_say_where_a_value_comes_from(tmp_path: Path) -> None:
+    # The query is read for its SQL text, but which piece it ends with is
+    # not known, so no source is claimed.
+    code = (
+        "def f(a, everyone):\n"
+        '    query = "SELECT * FROM t"\n'
+        "    if not everyone:\n"
+        '        query += " WHERE a = " + request.args["a"]\n'
+        "    cursor.execute(query)\n"
+    )
+
+    finding = finding_in(tmp_path, code)
+
+    assert finding.confidence is Confidence.MEDIUM
+    assert "Here the value comes from" not in finding.message
+
+
 @pytest.mark.parametrize(
     ("code", "rule_id"),
     [

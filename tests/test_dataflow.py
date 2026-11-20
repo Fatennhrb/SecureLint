@@ -244,7 +244,7 @@ def full_walk(tree: ast.Module) -> list[ast.AST]:
 def test_analyse_returns_the_same_nodes_as_a_full_walk(code: str) -> None:
     tree = ast.parse(code)
 
-    nodes, _ = analyse(tree)
+    nodes, _, _ = analyse(tree)
 
     assert len(nodes) == len({id(node) for node in nodes})
     assert {id(node) for node in nodes} == {id(node) for node in full_walk(tree)}
@@ -258,5 +258,103 @@ def test_analyse_returns_every_node_of_real_files() -> None:
 
     for path in files:
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        nodes, _ = analyse(tree)
+        nodes, _, _ = analyse(tree)
         assert len(nodes) == len(full_walk(tree)), path.name
+
+
+def last_read(tree: ast.Module, name: str) -> ast.Name:
+    reads = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name)
+        and node.id == name
+        and isinstance(node.ctx, ast.Load)
+    ]
+    return max(reads, key=lambda node: (node.lineno, node.col_offset))
+
+
+def pieces_of(code: str, name: str) -> list[str] | None:
+    """Return the pieces found for the last read of ``name``, as sorted text."""
+    tree = ast.parse(code)
+    _, _, other = analyse(tree)
+    pieces = other.pieces.get(last_read(tree, name))
+    return None if pieces is None else sorted(ast.unparse(p) for p in pieces)
+
+
+def return_of(code: str, name: str) -> str | None:
+    """Return what the last call of ``name`` gives back, as source text."""
+    tree = ast.parse(code)
+    _, _, other = analyse(tree)
+    returned = other.returns.get(last_read(tree, name))
+    return None if returned is None else ast.unparse(returned)
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ('q = "a"\nq += b\nprint(q)\n', ["'a'", "b"]),
+        ('q = "a"\nq = q + b\nprint(q)\n', ["'a'", "q + b"]),
+        (
+            'def f(c):\n    q = "a"\n    if c:\n        q = "b"\n    print(q)\n',
+            ["'a'", "'b'"],
+        ),
+    ],
+)
+def test_pieces_of_a_variable_given_values_with_equals_and_plus_equals(
+    code: str, expected: list[str]
+) -> None:
+    assert pieces_of(code, "q") == expected
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # Only one value: that is a certain value, not pieces.
+        'q = "a"\nprint(q)\n',
+        # Also given a value some other way.
+        'q = "a"\nfor q in x:\n    pass\nprint(q)\n',
+        'q = "a"\nq -= b\nprint(q)\n',
+        'def f(q):\n    q += "a"\n    print(q)\n',
+        # Changed from another function.
+        'q = "a"\nq += b\ndef g():\n    global q\n    q = c\nprint(q)\n',
+    ],
+)
+def test_no_pieces_when_one_value_is_not_known(code: str) -> None:
+    assert pieces_of(code, "q") is None
+
+
+def test_what_a_function_returns() -> None:
+    code = "def f(a):\n    return a + 1\n\nf(2)\n"
+
+    assert return_of(code, "f") == "a + 1"
+
+
+def test_a_return_inside_an_inner_function_does_not_count() -> None:
+    code = "def f(a):\n    def g():\n        return 0\n    return a + 1\n\nf(2)\n"
+
+    assert return_of(code, "f") == "a + 1"
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # Two returns: either may be the answer.
+        "def f(a):\n    if a:\n        return 1\n    return 2\n\nf(2)\n",
+        # No value returned.
+        "def f(a):\n    return\n\nf(2)\n",
+        # A decorator can replace the function.
+        "@cache\ndef f(a):\n    return a\n\nf(2)\n",
+        # A generator does not run its body when called.
+        "def f(a):\n    yield a\n    return a\n\nf(2)\n",
+        # A coroutine either.
+        "async def f(a):\n    return a\n\nf(2)\n",
+        # Defined twice.
+        "def f(a):\n    return a\n\ndef f(a):\n    return 0\n\nf(2)\n",
+        # Replaced after it was defined.
+        "def f(a):\n    return a\n\nf = g\nf(2)\n",
+        # A class, not a function.
+        "class f:\n    pass\n\nf(2)\n",
+    ],
+)
+def test_no_return_when_it_is_not_certain(code: str) -> None:
+    assert return_of(code, "f") is None

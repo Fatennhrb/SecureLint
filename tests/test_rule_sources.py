@@ -175,6 +175,28 @@ def test_value_made_harmless_is_not_called_user_input(
     assert "Here the value comes from" not in finding.message
 
 
+@pytest.mark.parametrize(
+    ("code", "rule_id"),
+    [
+        # Quoted for the shell, but used somewhere else: still dangerous.
+        (
+            'cursor.execute("SELECT * FROM t WHERE name = " + '
+            'shlex.quote(request.args["name"]))\n',
+            "SL105",
+        ),
+        ("eval(shlex.quote(input()))\n", "SL101"),
+    ],
+)
+def test_shell_quoting_does_not_protect_other_uses(
+    tmp_path: Path, code: str, rule_id: str
+) -> None:
+    finding = finding_in(tmp_path, code)
+
+    assert finding.rule_id == rule_id
+    assert finding.confidence is Confidence.HIGH
+    assert "Here the value comes from" in finding.message
+
+
 def test_the_first_part_of_the_message_is_unchanged(tmp_path: Path) -> None:
     plain = finding_in(tmp_path, "def f(x):\n    eval(x)\n")
     with_note = finding_in(tmp_path, "eval(input())\n")

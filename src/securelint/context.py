@@ -45,6 +45,14 @@ class FileContext:
     """For the name of a function being called, what its one ``return``
     gives back (see ``securelint.dataflow``)."""
 
+    project: "Mapping[str, tuple[ast.expr, FileContext] | None]" = field(
+        default_factory=dict
+    )
+    """What the functions of every scanned file return, by full name such
+    as ``"app.queries.find_user"``, with the context of the file that
+    defines each one. ``None`` marks a name two files could both mean.
+    Shared by all files of a scan and filled before any rule runs."""
+
     def value_of(self, node: ast.expr) -> ast.expr | None:
         """Return the expression a variable was given, if that is certain.
 
@@ -67,15 +75,30 @@ class FileContext:
             return self.pieces.get(node, ())
         return ()
 
-    def return_of(self, call: ast.Call) -> ast.expr | None:
+    def return_of(self, call: ast.Call) -> "tuple[ast.expr, FileContext] | None":
         """Return what a call gives back, when the function is known.
 
         For ``find_user(name)`` this is the expression of the one
-        ``return`` in ``def find_user``, written in the same file.
+        ``return`` in ``def find_user``, with the context of the file that
+        defines it: this file, or another scanned file it was imported from
+        (``from app.queries import find_user``, ``from .queries import
+        find_user``, ``import queries`` then ``queries.find_user``).
         """
         if isinstance(call.func, ast.Name):
-            return self.returns.get(call.func)
-        return None
+            returned = self.returns.get(call.func)
+            if returned is not None:
+                return returned, self
+        # Only an imported name can lead to another file.
+        written = dotted_name(call.func)
+        if written is None or written.partition(".")[0] not in self.imports:
+            return None
+        name = self.qualified_name(call.func)
+        if name is None:
+            return None
+        absolute = absolute_name(name, self.path)
+        if absolute is None:
+            return None
+        return self.project.get(absolute)
 
     def qualified_name(self, node: ast.expr, hops: int = 0) -> str | None:
         """Return the real, full name of what an expression refers to.
@@ -110,6 +133,40 @@ class FileContext:
         if target is None:
             return name
         return f"{target}{dot}{rest}"
+
+
+def module_parts(path: str) -> list[str]:
+    """Return the module a file is, as its parts.
+
+    ``"app/queries.py"`` is ``["app", "queries"]``; ``"app/__init__.py"``
+    is the package itself, ``["app"]``.
+    """
+    parts = path.removesuffix(".py").split("/")
+    if parts[-1] == "__init__":
+        parts.pop()
+    return parts
+
+
+def absolute_name(name: str, path: str) -> str | None:
+    """Turn a relative import, as kept in ``imports``, into a full name.
+
+    In ``app/views.py``, ``".queries.find_user"`` (from ``from .queries
+    import find_user``) is ``"app.queries.find_user"``. A name with no
+    leading dot is returned as it is. ``None`` when the dots climb above
+    the scanned directory.
+    """
+    level = len(name) - len(name.lstrip("."))
+    if level == 0:
+        return name
+    package = module_parts(path)
+    if not path.endswith("__init__.py"):
+        package = package[:-1]
+    climb = level - 1
+    if climb > len(package):
+        return None
+    base = package[: len(package) - climb]
+    rest = name[level:]
+    return ".".join([*base, rest]) if base else rest
 
 
 def dotted_name(node: ast.expr) -> str | None:

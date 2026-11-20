@@ -193,11 +193,16 @@ def _built_text(
             is_fixed(argument, context, hops) for argument in arguments
         )
 
-    # find_user(name), where find_user returns f"SELECT ... {name}".
+    # find_user(name), where find_user returns f"SELECT ... {name}", in
+    # this file or in another file of the project.
     if isinstance(node, ast.Call) and hops < MAX_HOPS:
         returned = context.return_of(node)
         if returned is not None:
-            return _built_text(returned, context, hops + 1, expanding)
+            expression, owner = returned
+            if owner is not context:
+                # Variable names of another file are unrelated to these.
+                expanding = frozenset()
+            return _built_text(expression, owner, hops + 1, expanding)
 
     # A parameter, a function call...: no text to read, and not fixed.
     return "", True

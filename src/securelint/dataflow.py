@@ -40,6 +40,9 @@ that only need to know what text a value can contain:
 
   ``find_user`` must be defined once with ``def`` in the same file, with no
   decorator (which could replace it), and must not be a generator.
+
+  Functions defined this way at the top of a file are also listed by name,
+  so a call from another file of the project can be followed to them.
 """
 
 import ast
@@ -122,6 +125,11 @@ class OtherValues:
     ``return``. Its parameters, read inside that expression, have no
     known value."""
 
+    exported: dict[str, ast.expr] = field(default_factory=dict)
+    """For each function defined at the top of the file that the same
+    rules allow following, by name, the expression of its ``return``.
+    Other files that import it can follow it too."""
+
 
 def analyse(
     tree: ast.Module,
@@ -179,6 +187,15 @@ def analyse(
                     other.returns[read] = returned
             elif read.id not in owner.unpieced:
                 other.pieces[read] = tuple(owner.pieces[read.id])
+
+    # The first scope read is the file itself.
+    module = scopes[0]
+    for name, function in module.functions.items():
+        if name in shared or len(module.bindings[name]) != 1:
+            continue
+        returned = _single_return(function, scope_of)
+        if returned is not None:
+            other.exported[name] = returned
     return nodes, values, other
 
 

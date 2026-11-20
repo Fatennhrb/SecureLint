@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from securelint.context import FileContext, collect_imports
+from securelint.context import FileContext, collect_imports, module_parts
 from securelint.dataflow import analyse
 from securelint.discovery import SourceFile, discover
 from securelint.fingerprint import add_fingerprints
@@ -117,15 +117,22 @@ def scan(
     findings: list[Finding] = []
     silenced: list[Silenced] = []
     failures: list[ParseFailure] = []
-    files_scanned = 0
+
+    # First every file is read, so that a call to a function defined in
+    # another file can be followed whatever order the files come in.
+    project: dict[str, tuple[ast.expr, FileContext] | None] = {}
+    prepared: list[tuple[ParsedFile, list[ast.AST], FileContext]] = []
     for source_file in discover(target, exclude):
         result = parse(source_file)
         if isinstance(result, ParseFailure):
             failures.append(result)
             continue
-        files_scanned += 1
+        prepared.append(_prepare_file(result, project))
+
+    for result, nodes, context in prepared:
+        source_file = result.source_file
         kept, hidden = apply_comments(
-            _check_file(result, rules_by_node_type),
+            _check_file(nodes, context, rules_by_node_type),
             result.source,
             source_file.relative_path,
             running,
@@ -151,7 +158,7 @@ def scan(
     return ScanResult(
         findings=tuple(findings),
         failures=tuple(failures),
-        files_scanned=files_scanned,
+        files_scanned=len(prepared),
         silenced=tuple(silenced),
         base=_base(target, root),
     )
@@ -170,27 +177,52 @@ def _base(target: Path, root: Path | None) -> str:
     return "" if base == "." else base
 
 
+def _prepare_file(
+    parsed_file: ParsedFile,
+    project: dict[str, tuple[ast.expr, FileContext] | None],
+) -> tuple[ParsedFile, list[ast.AST], FileContext]:
+    """Walk one syntax tree a single time, and learn what the rules need.
+
+    The nodes are kept in a list because they are needed twice: first to
+    learn the file's imports, then to run the rules. An import can be
+    written below the code that uses it (inside a function, for example),
+    so the imports must all be known before the first rule runs.
+
+    The functions the file defines at the top are added to ``project``,
+    under every name another file could import them by.
+    """
+    path = parsed_file.source_file.relative_path
+    nodes, values, other = analyse(parsed_file.tree)
+    context = FileContext(
+        path=path,
+        imports=collect_imports(nodes),
+        values=values,
+        pieces=other.pieces,
+        returns=other.returns,
+        project=project,
+    )
+    # "app/queries.py" can be imported as app.queries or, when the scan
+    # starts above the package (a "src" folder), as queries.
+    parts = module_parts(path)
+    for name, returned in other.exported.items():
+        for start in range(len(parts)):
+            full_name = ".".join([*parts[start:], name])
+            # Two files that could both be meant: follow neither.
+            project[full_name] = None if full_name in project else (returned, context)
+    return parsed_file, nodes, context
+
+
 def _check_file(
-    parsed_file: ParsedFile, rules_by_node_type: dict[type[ast.AST], list[Rule]]
+    nodes: list[ast.AST],
+    context: FileContext,
+    rules_by_node_type: dict[type[ast.AST], list[Rule]],
 ) -> list[Finding]:
-    """Walk one syntax tree a single time, whatever the number of rules.
+    """Hand each node of a file to the rules interested in its type.
 
     Each rule walking the tree by itself would make the scan slower with
     every rule added. Here the tree is walked once and each node is handed
     to the rules interested in its type.
     """
-    # The nodes are kept in a list because they are needed twice: first to
-    # learn the file's imports, then to run the rules. An import can be
-    # written below the code that uses it (inside a function, for example),
-    # so the imports must all be known before the first rule runs.
-    nodes, values, other = analyse(parsed_file.tree)
-    context = FileContext(
-        path=parsed_file.source_file.relative_path,
-        imports=collect_imports(nodes),
-        values=values,
-        pieces=other.pieces,
-        returns=other.returns,
-    )
     findings: list[Finding] = []
     for node in nodes:
         for rule in rules_by_node_type.get(type(node), ()):

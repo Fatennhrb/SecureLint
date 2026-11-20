@@ -39,6 +39,9 @@ def findings_in(tmp_path: Path, code: str) -> tuple[Finding, ...]:
         "from subprocess import run\nrun(command, shell=True)\n",
         "from subprocess import Popen\nPopen(command, shell=True)\n",
         "from subprocess import check_output as out\nout(command, shell=True)\n",
+        # A variable that is certainly True.
+        "use_shell = True\nsubprocess.run(command, shell=use_shell)\n",
+        "SHELL = True\n\ndef f(command):\n    subprocess.run(command, shell=SHELL)\n",
         "from os import system\nsystem(command)\n",
         "from os import system as sh\nsh(command)\n",
         "import os as operating_system\noperating_system.popen(command)\n",
@@ -65,6 +68,11 @@ def test_reports_shell_commands_built_at_run_time(tmp_path: Path, code: str) -> 
         "subprocess.Popen(['git', 'log', branch])\n",
         # Whether a shell is used is not known here.
         "subprocess.run(command, shell=use_shell)\n",
+        "use_shell = False\nsubprocess.run(command, shell=use_shell)\n",
+        (
+            "def f(command, use_shell=True):\n"
+            "    subprocess.run(command, shell=use_shell)\n"
+        ),
         # Other things that only share a name.
         "app.run(host, debug=True)\n",
         "app.run(command, shell=True)\n",

@@ -4,6 +4,13 @@ What changed in each version of SecureLint, newest first.
 
 ## Unreleased
 
+- SL102 also reports `shell=use_shell` when `use_shell` is certainly
+  `True` (given that value once and never changed). A value that is not
+  known, such as a parameter, is still left alone.
+- `shlex.quote` no longer hides where a value comes from in rules other
+  than SL102. It makes text safe for a shell, not for an SQL query or for
+  `eval`, so `cursor.execute("..." + shlex.quote(request.args["name"]))` is
+  now reported with high confidence and names `request.args` as the source.
 - `securelint explain FILE --line N` explains only the findings on one line
   of one file, in text or in the same JSON format as `scan`. It goes through
   the same settings, baseline and policy as a scan, sends nothing when the

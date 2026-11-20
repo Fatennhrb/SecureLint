@@ -37,7 +37,12 @@ _REQUEST_PARTS = frozenset(
 
 # Functions that turn any text into a harmless value, so what goes in no
 # longer matters: int("1; DROP TABLE users") fails instead of passing on.
-_CLEANERS = frozenset({"int", "float", "bool", "len", "shlex.quote"})
+_CLEANERS = frozenset({"int", "float", "bool", "len"})
+
+# Functions that make text harmless for one use only. shlex.quote protects
+# a shell command, but its output still breaks an SQL query or Python code,
+# so only the shell rule passes it to ``find_source``.
+SHELL_CLEANERS = frozenset({"shlex.quote"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,14 +56,22 @@ class Source:
     """The line it is on."""
 
 
-def find_source(node: ast.expr, context: FileContext) -> Source | None:
+def find_source(
+    node: ast.expr,
+    context: FileContext,
+    extra_cleaners: frozenset[str] = frozenset(),
+) -> Source | None:
     """Return where the value of an expression comes from, if a user controls it.
 
     The expression is searched piece by piece, and variables are followed
     to the value they were given. Returns ``None`` when no known entry
     point is found, which does not mean the value is safe: only that
     SecureLint cannot tell.
+
+    ``extra_cleaners`` names functions that make a value harmless for the
+    calling rule only, on top of those that do for every rule.
     """
+    cleaners = _CLEANERS | extra_cleaners
     seen: set[int] = set()
     waiting: list[tuple[ast.AST, int]] = [(node, 0)]
     while waiting:
@@ -79,7 +92,7 @@ def find_source(node: ast.expr, context: FileContext) -> Source | None:
             return Source(description, getattr(current, "lineno", 1))
         is_cleaner = (
             isinstance(current, ast.Call)
-            and context.qualified_name(current.func) in _CLEANERS
+            and context.qualified_name(current.func) in cleaners
         )
         if is_cleaner:
             continue

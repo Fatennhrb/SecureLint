@@ -7,7 +7,7 @@ from securelint.context import FileContext
 from securelint.engine import Rule
 from securelint.model import Confidence, Finding, Severity
 from securelint.rules._helpers import is_fixed
-from securelint.rules._sources import find_source, with_source
+from securelint.rules._sources import SHELL_CLEANERS, find_source, with_source
 
 # These always hand their command to the shell.
 _ALWAYS_SHELL = frozenset(
@@ -65,7 +65,7 @@ class ShellCommandInjection(Rule):
         name = context.qualified_name(node.func)
         if name in _ALWAYS_SHELL:
             label = f"{name}()"
-        elif name in _SHELL_ON_REQUEST and _has_shell_true(node):
+        elif name in _SHELL_ON_REQUEST and _has_shell_true(node, context):
             label = f"{name}(..., shell=True)"
         else:
             return []
@@ -79,7 +79,7 @@ class ShellCommandInjection(Rule):
             f"{label} runs its command through the shell; if any part of the "
             "command can come from a user, they can run their own commands.",
             Confidence.MEDIUM,
-            find_source(command, context),
+            find_source(command, context, SHELL_CLEANERS),
         )
         return [
             Finding(
@@ -94,13 +94,21 @@ class ShellCommandInjection(Rule):
         ]
 
 
-def _has_shell_true(call: ast.Call) -> bool:
-    return any(
-        keyword.arg == "shell"
-        and isinstance(keyword.value, ast.Constant)
-        and keyword.value.value is True
-        for keyword in call.keywords
-    )
+def _has_shell_true(call: ast.Call, context: FileContext) -> bool:
+    """Return True if the call certainly asks for a shell.
+
+    That is ``shell=True``, or ``shell=use_shell`` when ``use_shell`` was
+    given the value ``True`` once and never changed. A value that is not
+    known is left alone: it may well be ``False``.
+    """
+    for keyword in call.keywords:
+        if keyword.arg != "shell":
+            continue
+        value = keyword.value
+        if isinstance(value, ast.Name):
+            value = context.value_of(value) or value
+        return isinstance(value, ast.Constant) and value.value is True
+    return False
 
 
 def _command_argument(call: ast.Call) -> ast.expr | None:

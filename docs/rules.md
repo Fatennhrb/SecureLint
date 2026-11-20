@@ -56,8 +56,14 @@ cursor.execute(find_user(name))  # what find_user returns is read
 A variable is read this way only when every value it gets comes from `=` or
 `+=`; a loop variable or a parameter among them stops it. A function is read
 only when it is defined once with `def`, has a single `return`, no decorator,
-and is not a generator or `async def`. A function imported from another file
-is not read.
+and is not a generator or `async def`.
+
+A function defined at the top of another scanned file is read the same way
+when it is imported: `from app.queries import find_user`, a relative import
+such as `from .queries import find_user`, or `import queries` followed by
+`queries.find_user(...)`. When two files could both be meant (two `utils.py`
+in different folders, imported as `utils`), neither is read. Methods are not
+followed.
 
 A value set once at the top of a file is known inside every function of that
 file, and fixed pieces put together are still fixed. None of these is reported:

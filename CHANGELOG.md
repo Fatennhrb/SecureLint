@@ -4,6 +4,12 @@ What changed in each version of SecureLint, newest first.
 
 ## Unreleased
 
+- SL105 follows a call into a function defined in another scanned file, when
+  it is imported (`from app.queries import find_user`, `from .queries import
+  find_user`, `import queries`). The same rules apply as for a function in
+  the same file. A name two files could both mean is not followed.
+- Every file is now read before any rule runs, so the whole scan's analysis
+  is kept in memory until the rules have run.
 - SL105 reads SQL queries built in steps (`query = "SELECT ..."`, then
   `query += f"... {name}"`), in any order and in any branch, when every
   value the variable gets comes from `=` or `+=`.

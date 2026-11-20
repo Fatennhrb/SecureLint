@@ -4,7 +4,12 @@ import ast
 
 import pytest
 
-from securelint.context import FileContext, collect_imports
+from securelint.context import (
+    FileContext,
+    absolute_name,
+    collect_imports,
+    module_parts,
+)
 
 
 def context_for(code: str) -> FileContext:
@@ -75,3 +80,31 @@ def test_collect_imports_mapping() -> None:
         "sp": "subprocess",
         "unpickle": "pickle.loads",
     }
+
+
+@pytest.mark.parametrize(
+    ("path", "parts"),
+    [
+        ("app.py", ["app"]),
+        ("shop/queries.py", ["shop", "queries"]),
+        ("shop/__init__.py", ["shop"]),
+    ],
+)
+def test_module_parts(path: str, parts: list[str]) -> None:
+    assert module_parts(path) == parts
+
+
+@pytest.mark.parametrize(
+    ("name", "path", "expected"),
+    [
+        ("os.system", "shop/app.py", "os.system"),
+        (".queries.find_user", "shop/app.py", "shop.queries.find_user"),
+        (".queries.find_user", "shop/__init__.py", "shop.queries.find_user"),
+        ("..queries.find_user", "shop/views/app.py", "shop.queries.find_user"),
+        (".find_user", "shop/app.py", "shop.find_user"),
+        (".queries.find_user", "app.py", "queries.find_user"),
+        ("..queries.find_user", "app.py", None),
+    ],
+)
+def test_absolute_name(name: str, path: str, expected: str | None) -> None:
+    assert absolute_name(name, path) == expected

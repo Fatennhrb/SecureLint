@@ -37,6 +37,14 @@ class FileContext:
     """For each place a variable is read, the expression it was given, when
     there is exactly one (see ``securelint.dataflow``)."""
 
+    pieces: Mapping[ast.Name, tuple[ast.expr, ...]] = field(default_factory=dict)
+    """For a variable given its value only with ``=`` and ``+=``, more than
+    once, the right-hand side of each (see ``securelint.dataflow``)."""
+
+    returns: Mapping[ast.Name, ast.expr] = field(default_factory=dict)
+    """For the name of a function being called, what its one ``return``
+    gives back (see ``securelint.dataflow``)."""
+
     def value_of(self, node: ast.expr) -> ast.expr | None:
         """Return the expression a variable was given, if that is certain.
 
@@ -46,6 +54,27 @@ class FileContext:
         """
         if isinstance(node, ast.Name):
             return self.values.get(node)
+        return None
+
+    def pieces_of(self, node: ast.expr) -> tuple[ast.expr, ...]:
+        """Return every piece of text a variable can be made of, if known.
+
+        After ``query = "SELECT ..."`` and ``query += f"... {name}"``, the
+        two right-hand sides. Empty for anything else, and for a variable
+        that also gets a value some other way.
+        """
+        if isinstance(node, ast.Name):
+            return self.pieces.get(node, ())
+        return ()
+
+    def return_of(self, call: ast.Call) -> ast.expr | None:
+        """Return what a call gives back, when the function is known.
+
+        For ``find_user(name)`` this is the expression of the one
+        ``return`` in ``def find_user``, written in the same file.
+        """
+        if isinstance(call.func, ast.Name):
+            return self.returns.get(call.func)
         return None
 
     def qualified_name(self, node: ast.expr, hops: int = 0) -> str | None:

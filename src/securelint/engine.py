@@ -183,11 +183,13 @@ def _check_file(
     # learn the file's imports, then to run the rules. An import can be
     # written below the code that uses it (inside a function, for example),
     # so the imports must all be known before the first rule runs.
-    nodes, values = analyse(parsed_file.tree)
+    nodes, values, other = analyse(parsed_file.tree)
     context = FileContext(
         path=parsed_file.source_file.relative_path,
         imports=collect_imports(nodes),
         values=values,
+        pieces=other.pieces,
+        returns=other.returns,
     )
     findings: list[Finding] = []
     for node in nodes:

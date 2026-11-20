@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from securelint.context import FileContext
-from securelint.dataflow import analyse
+from securelint.dataflow import OtherValues, analyse
 from securelint.engine import Rule, scan
 from securelint.model import Confidence, Finding, Severity
 
@@ -156,7 +156,7 @@ def test_tree_is_walked_once_per_file_whatever_the_number_of_rules(
 
     def counting_analyse(
         tree: ast.Module,
-    ) -> tuple[list[ast.AST], dict[ast.Name, ast.expr]]:
+    ) -> tuple[list[ast.AST], dict[ast.Name, ast.expr], OtherValues]:
         nonlocal walks
         walks += 1
         return analyse(tree)

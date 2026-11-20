@@ -4,6 +4,18 @@ What changed in each version of SecureLint, newest first.
 
 ## Unreleased
 
+- SL105 reads SQL queries built in steps (`query = "SELECT ..."`, then
+  `query += f"... {name}"`), in any order and in any branch, when every
+  value the variable gets comes from `=` or `+=`.
+- SL105 reads what a function in the same file returns:
+  `cursor.execute(find_user(name))` is reported when `find_user` returns
+  `f"SELECT ... {name}"`. The function must be defined once with `def`, with
+  a single `return`, no decorator, and not be a generator or `async def`.
+- These pieces are only read for their SQL text. As before, a variable given
+  a value more than once never says where its value comes from, so such a
+  finding keeps medium confidence.
+- `securelint.dataflow.analyse` returns a third result, `OtherValues`, with
+  these pieces and returns.
 - SL102 also reports `shell=use_shell` when `use_shell` is certainly
   `True` (given that value once and never changed). A value that is not
   known, such as a parameter, is still left alone.

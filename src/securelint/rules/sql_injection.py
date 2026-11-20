@@ -39,6 +39,14 @@ class SqlInjection(Rule):
         cursor.execute("SELECT * FROM {}".format(table))
         session.execute(text(f"SELECT * FROM users WHERE id = {user_id}"))
 
+        query = "SELECT * FROM users"
+        query += f" WHERE name = '{name}'"
+        cursor.execute(query)
+
+        def find_user(name):
+            return f"SELECT * FROM users WHERE name = '{name}'"
+        cursor.execute(find_user(name))
+
     Not reported::
 
         cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
@@ -112,19 +120,40 @@ def _query_argument(call: ast.Call, context: FileContext) -> ast.expr | None:
 
 
 def _built_text(
-    node: ast.expr, context: FileContext, hops: int = 0
+    node: ast.expr,
+    context: FileContext,
+    hops: int = 0,
+    expanding: frozenset[str] = frozenset(),
 ) -> tuple[str, bool]:
     """Describe how a string is put together.
 
     Returns the text written in the source, and whether anything else is
     added to it when the program runs. For ``"SELECT " + column`` that is
     ``("SELECT ", True)``.
+
+    ``expanding`` holds the variables whose pieces are being read, so
+    ``query = query + value`` does not read ``query`` again and again.
     """
-    # A variable given its value once: look at that value instead.
     if isinstance(node, ast.Name) and hops < MAX_HOPS:
+        # A variable given its value once: look at that value instead.
         value = context.value_of(node)
         if value is not None:
-            return _built_text(value, context, hops + 1)
+            return _built_text(value, context, hops + 1, expanding)
+        # query = "SELECT ..." then query += f"... {name}": every piece
+        # counts, whatever the order they run in.
+        pieces = context.pieces_of(node)
+        if pieces:
+            if node.id in expanding:
+                # Its pieces are already being read further up.
+                return "", False
+            inner = expanding | {node.id}
+            described = [
+                _built_text(piece, context, hops + 1, inner) for piece in pieces
+            ]
+            return (
+                " ".join(text for text, _ in described),
+                any(has_values for _, has_values in described),
+            )
 
     # "SELECT ..."
     if isinstance(node, ast.Constant):
@@ -138,18 +167,18 @@ def _built_text(
             if isinstance(part, ast.FormattedValue):
                 has_values = has_values or not is_fixed(part.value, context, hops)
             else:
-                text += _built_text(part, context, hops)[0]
+                text += _built_text(part, context, hops, expanding)[0]
         return text, has_values
 
     # "SELECT ..." + value
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        left_text, left_values = _built_text(node.left, context, hops)
-        right_text, right_values = _built_text(node.right, context, hops)
+        left_text, left_values = _built_text(node.left, context, hops, expanding)
+        right_text, right_values = _built_text(node.right, context, hops, expanding)
         return left_text + right_text, left_values or right_values
 
     # "SELECT ... %s" % value
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
-        text, has_values = _built_text(node.left, context, hops)
+        text, has_values = _built_text(node.left, context, hops, expanding)
         return text, has_values or not is_fixed(node.right, context, hops)
 
     # "SELECT ... {}".format(value)
@@ -158,11 +187,17 @@ def _built_text(
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "format"
     ):
-        text, has_values = _built_text(node.func.value, context, hops)
+        text, has_values = _built_text(node.func.value, context, hops, expanding)
         arguments = [*node.args, *(keyword.value for keyword in node.keywords)]
         return text, has_values or not all(
             is_fixed(argument, context, hops) for argument in arguments
         )
+
+    # find_user(name), where find_user returns f"SELECT ... {name}".
+    if isinstance(node, ast.Call) and hops < MAX_HOPS:
+        returned = context.return_of(node)
+        if returned is not None:
+            return _built_text(returned, context, hops + 1, expanding)
 
     # A parameter, a function call...: no text to read, and not fixed.
     return "", True

@@ -130,7 +130,7 @@ def test_the_published_numbers_are_still_true() -> None:
 
     assert completed.returncode == 0, completed.stderr
     assert (
-        "| **Total** | **63** | **54** | **9** | **4** | **49** | **14** | **21** |"
+        "| **Total** | **63** | **58** | **5** | **4** | **49** | **14** | **21** |"
         in completed.stdout
     )
     assert "found 46, missed 17, false alarms 18." in completed.stdout

@@ -106,3 +106,24 @@ def test_yaml_finding_details(tmp_path: Path) -> None:
     assert finding.confidence is Confidence.MEDIUM
     assert finding.message.startswith("yaml.load() without a safe loader")
     assert "yaml.safe_load()" in finding.message
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "pandas.read_pickle(path)\n",
+        "import pandas as pd\n\npd.read_pickle(path)\n",
+        "from pandas import read_pickle\n\nread_pickle(path)\n",
+    ],
+)
+def test_reports_pandas_read_pickle(tmp_path: Path, code: str) -> None:
+    (finding,) = findings_in(tmp_path, code)
+
+    assert finding.message.startswith("pandas.read_pickle() can run code")
+    assert finding.confidence is Confidence.LOW
+
+
+def test_does_not_report_pandas_reading_other_formats(tmp_path: Path) -> None:
+    assert (
+        findings_in(tmp_path, "pandas.read_csv(path)\npandas.read_json(path)\n") == ()
+    )

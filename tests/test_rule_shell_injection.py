@@ -116,3 +116,45 @@ def test_message_shows_the_real_name_behind_an_alias(tmp_path: Path) -> None:
 
     assert finding.line == 2
     assert finding.message.startswith("subprocess.run(..., shell=True) runs")
+
+
+@pytest.mark.parametrize(
+    ("code", "label"),
+    [
+        ('subprocess.run(["sh", "-c", command])\n', '["sh", "-c", ...]'),
+        ('subprocess.run(("bash", "-c", command))\n', '["bash", "-c", ...]'),
+        ('subprocess.Popen(["/bin/bash", "-lc", command])\n', '"-lc"'),
+        ('subprocess.call(["zsh", "-e", "-c", command])\n', '"-c"'),
+        ('subprocess.run(["cmd.exe", "/c", command])\n', '"/c"'),
+        ('subprocess.run(args=["sh", "-c", "ls " + folder])\n', '"-c"'),
+        # The list kept in a variable first.
+        ('argv = ["sh", "-c", command]\nsubprocess.run(argv)\n', '"-c"'),
+    ],
+)
+def test_reports_a_shell_started_by_hand(tmp_path: Path, code: str, label: str) -> None:
+    (finding,) = findings_in(tmp_path, code)
+
+    assert finding.rule_id == "SL102"
+    assert label in finding.message
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # The script is fixed.
+        'subprocess.run(["sh", "-c", "ls -l"])\n',
+        # Not a shell.
+        'subprocess.run(["python", "-c", code])\n',
+        'subprocess.run(["git", "-c", setting, "status"])\n',
+        # A shell running a script file, not a command.
+        'subprocess.run(["bash", "deploy.sh", target])\n',
+        # A long option, not -c.
+        'subprocess.run(["bash", "--rcfile", path])\n',
+        # Nothing after -c.
+        'subprocess.run(["sh", "-c"])\n',
+        # The program is not known.
+        'subprocess.run([shell, "-c", command])\n',
+    ],
+)
+def test_does_not_report_other_argument_lists(tmp_path: Path, code: str) -> None:
+    assert findings_in(tmp_path, code) == ()

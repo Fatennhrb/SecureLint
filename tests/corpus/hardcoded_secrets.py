@@ -38,7 +38,7 @@ def is_admin(password):
 
 SESSION_TOKEN = "abc123"  # missed: SL104
 CREDENTIALS = ("admin", "hunter2")  # missed: SL104
-DATABASE_URL = "postgres://app:hunter2@db.local/app"  # missed: SL104
+DATABASE_URL = "postgres://app:hunter2@db.local/app"  # expect: SL104
 
 
 # ---- Safe code: nothing below is dangerous. ----

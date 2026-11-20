@@ -57,7 +57,7 @@ def stored_in_a_variable(blob):
 
 
 def shared_table(download_path):
-    return pandas.read_pickle(download_path)  # missed: SL103
+    return pandas.read_pickle(download_path)  # expect: SL103
 
 
 # ---- Safe code: nothing below is dangerous. ----

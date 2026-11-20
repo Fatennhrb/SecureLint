@@ -13,7 +13,7 @@ from securelint.rules._sources import find_source, with_source
 _PICKLE_LIKE = frozenset(
     {f"{module}.{function}" for module in ("pickle", "cPickle", "_pickle", "dill")
      for function in ("load", "loads", "Unpickler")}
-    | {"marshal.load", "marshal.loads"}
+    | {"marshal.load", "marshal.loads", "pandas.read_pickle"}
 )  # fmt: skip
 
 _YAML_LOAD = frozenset({"yaml.load", "yaml.load_all"})
@@ -37,6 +37,7 @@ class UnsafeDeserialization(Rule):
 
         pickle.load(uploaded_file)
         pickle.loads(request.data)
+        pandas.read_pickle(downloaded_path)
         yaml.load(document)
         yaml.load(document, Loader=yaml.Loader)
 

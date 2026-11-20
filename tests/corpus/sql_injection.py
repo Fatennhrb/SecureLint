@@ -51,7 +51,7 @@ def built_on_another_line(cursor, name):
 
 
 def with_pandas(connection, city):
-    return pandas.read_sql(f"SELECT * FROM users WHERE city = '{city}'", connection)  # missed: SL105
+    return pandas.read_sql(f"SELECT * FROM users WHERE city = '{city}'", connection)  # expect: SL105
 
 
 # ---- Safe code: nothing below is dangerous. ----

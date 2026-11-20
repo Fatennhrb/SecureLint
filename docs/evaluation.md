@@ -10,14 +10,15 @@ including the ones SecureLint does not find yet.
 
 | | Count |
 |---|---:|
-| Dangerous lines reported | 54 |
-| Dangerous lines missed | 9 |
+| Dangerous lines reported | 58 |
+| Dangerous lines missed | 5 |
 | Safe lines reported by mistake | 4 |
 
-The misses are cases the scanner cannot follow yet, such as a shell started
-by hand (`subprocess.run(["sh", "-c", command])`) or a password inside a
-database address.
-Version 0.1.0 reported 50, missed 13 and had 8 false alarms. These examples were written for this
+The misses are cases the scanner cannot follow yet, such as options passed in
+a dictionary (`subprocess.run(command, **options)`) or a short password given
+as a default value.
+Version 0.1.0 reported 50, missed 13 and had 8 false alarms; before the checks
+for `pandas`, shells started by hand and passwords in addresses, 54, 9 and 4. These examples were written for this
 project, so the
 numbers show what works and what does not today, not results on real projects.
 
@@ -34,11 +35,11 @@ for the five kinds of problems both look for
 | Kind of problem | Dangerous lines | SecureLint found | missed | false alarms | Bandit found | missed | false alarms |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Code execution (eval, exec) | 8 | 8 | 0 | 0 | 5 | 3 | 2 |
-| Shell command injection | 13 | 11 | 2 | 1 | 10 | 3 | 6 |
-| Unsafe deserialization | 14 | 13 | 1 | 1 | 12 | 2 | 2 |
-| Hard-coded secret | 16 | 11 | 5 | 2 | 12 | 4 | 7 |
-| SQL injection | 12 | 11 | 1 | 0 | 10 | 2 | 4 |
-| **Total** | **63** | **54** | **9** | **4** | **49** | **14** | **21** |
+| Shell command injection | 13 | 12 | 1 | 1 | 10 | 3 | 6 |
+| Unsafe deserialization | 14 | 14 | 0 | 1 | 12 | 2 | 2 |
+| Hard-coded secret | 16 | 12 | 4 | 2 | 12 | 4 | 7 |
+| SQL injection | 12 | 12 | 0 | 0 | 10 | 2 | 4 |
+| **Total** | **63** | **58** | **5** | **4** | **49** | **14** | **21** |
 
 With only its medium and high confidence findings, Bandit finds 46, misses 17
 and has 18 false alarms.
@@ -50,9 +51,9 @@ How to read these numbers:
   command or a fixed `eval("2 + 2")` counts as safe. Bandit warns about every
   `os.system` and every `eval` by design, which are false alarms here and a
   deliberate choice there.
-- **Bandit does better on hard-coded secrets.** It finds a password given as a
-  default value, compared with `==`, and named `SESSION_TOKEN`, which
-  SecureLint misses. It also finds `pandas.read_sql` and `pandas.read_pickle`.
+- **Both find 12 hard-coded secrets, but not the same ones.** Bandit finds a
+  password given as a default value, compared with `==`, and named
+  `SESSION_TOKEN`, which SecureLint misses.
 - **SecureLint does better where values or functions go through a variable**
   (`run = os.system`, `query = f"..."` then `execute(query)`) and on calls such
   as `builtins.eval` or `yaml.unsafe_load`.

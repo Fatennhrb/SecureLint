@@ -93,7 +93,7 @@ The repository includes automated checks, an annotated test corpus, comparisons 
 
 | Project evaluation | Reported result | Context |
 |:---|---:|:---|
-| Dangerous cases found | **54 / 63** | In the project-authored corpus; 9 missed cases and 4 false alarms |
+| Dangerous cases found | **58 / 63** | In the project-authored corpus; 5 missed cases and 4 false alarms |
 | Scan benchmark (v1.0.0) | **11.68 s** | 3,659 Python standard-library files; one Windows laptop, fastest of five runs |
 | Real-project check | **4 projects** | Flask, Requests, HTTPie and Jinja; limited manual review of reported findings |
 

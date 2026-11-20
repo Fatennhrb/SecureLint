@@ -4,6 +4,16 @@ What changed in each version of SecureLint, newest first.
 
 ## Unreleased
 
+- SL105 checks `pandas.read_sql()` and `pandas.read_sql_query()`.
+- SL103 reports `pandas.read_pickle()`, which loads pickle data.
+- SL102 reports a shell started by hand, without `shell=True`:
+  `subprocess.run(["sh", "-c", command])`, `["bash", "-lc", ...]`,
+  `["cmd", "/c", ...]`.
+- SL104 reports a password written inside an address, such as
+  `"postgres://app:hunter2@db/app"`, under any name or as a plain argument.
+  Placeholders such as `${DB_PASSWORD}` are not reported.
+- The corpus now finds 58 of 63 dangerous lines (54 before), with the same
+  4 false alarms.
 - SL105 reads SQL queries built in steps (`query = "SELECT ..."`, then
   `query += f"... {name}"`), in any order and in any branch, when every
   value the variable gets comes from `=` or `+=`.

@@ -201,3 +201,38 @@ def test_a_query_extended_many_times_is_read_quickly(tmp_path: Path) -> None:
     (finding,) = findings_in(tmp_path, code)
 
     assert finding.line == 33
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "pandas.read_sql(f\"SELECT * FROM users WHERE city = '{city}'\", db)\n",
+        (
+            "import pandas as pd\n\n"
+            'pd.read_sql_query("SELECT * FROM t WHERE a = " + a, db)\n'
+        ),
+        (
+            "from pandas import read_sql\n\n"
+            'read_sql(sql=f"DELETE FROM t WHERE id = {i}", con=db)\n'
+        ),
+    ],
+)
+def test_reports_pandas_read_sql(tmp_path: Path, code: str) -> None:
+    (finding,) = findings_in(tmp_path, code)
+
+    assert "read_sql" in finding.message
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # The values passed separately.
+        'pandas.read_sql("SELECT * FROM users WHERE city = ?", db, params=(city,))\n',
+        # A table name, not a query: a different function.
+        "pandas.read_sql_table(table, db)\n",
+        # Some other read_sql, not pandas.
+        'reports.read_sql(f"SELECT * FROM {table}")\n',
+    ],
+)
+def test_does_not_report_safe_pandas_queries(tmp_path: Path, code: str) -> None:
+    assert findings_in(tmp_path, code) == ()

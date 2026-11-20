@@ -59,7 +59,7 @@ def options_in_a_dictionary(command):
 
 
 def shell_started_by_hand(command):
-    subprocess.run(["sh", "-c", command])  # missed: SL102
+    subprocess.run(["sh", "-c", command])  # expect: SL102
 
 
 # ---- Safe code: nothing below is dangerous. ----

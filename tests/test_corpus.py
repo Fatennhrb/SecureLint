@@ -28,10 +28,10 @@ _ANNOTATION = re.compile(r"#\s*(expect|missed|false-alarm):\s*(SL\d+(?:\s*,\s*SL
 # tests/corpus/README.md and in the main README; keep the three in step.
 TOTALS = {
     "SL101": (8, 0, 0),
-    "SL102": (11, 2, 1),
-    "SL103": (13, 1, 1),
-    "SL104": (11, 5, 2),
-    "SL105": (11, 1, 0),
+    "SL102": (12, 1, 1),
+    "SL103": (14, 0, 1),
+    "SL104": (12, 4, 2),
+    "SL105": (12, 0, 0),
 }
 
 Case = tuple[int, str]

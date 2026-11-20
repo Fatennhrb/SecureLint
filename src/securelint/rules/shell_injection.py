@@ -30,6 +30,9 @@ _SHELL_ON_REQUEST = frozenset(
     }
 )
 
+# Programs that read a command as text after "-c" ("/c" for cmd.exe).
+_SHELLS = frozenset({"sh", "bash", "dash", "zsh", "ksh", "ash", "fish", "cmd"})
+
 # The command is the first argument, or one of these keywords.
 _COMMAND_KEYWORDS = frozenset({"args", "command", "cmd"})
 
@@ -45,6 +48,7 @@ class ShellCommandInjection(Rule):
 
         os.system("ping " + host)
         subprocess.run(f"convert {name} out.png", shell=True)
+        subprocess.run(["sh", "-c", command])  # a shell started by hand
 
     Not reported::
 
@@ -63,14 +67,20 @@ class ShellCommandInjection(Rule):
         if not isinstance(node, ast.Call):
             return []
         name = context.qualified_name(node.func)
+        command = _command_argument(node)
         if name in _ALWAYS_SHELL:
             label = f"{name}()"
         elif name in _SHELL_ON_REQUEST and _has_shell_true(node, context):
             label = f"{name}(..., shell=True)"
+        elif name in _SHELL_ON_REQUEST and command is not None:
+            started = _shell_started_by_hand(command, context)
+            if started is None:
+                return []
+            shell, flag, command = started
+            label = f'{name}(["{shell}", "{flag}", ...])'
         else:
             return []
 
-        command = _command_argument(node)
         if command is None or is_fixed(command, context):
             return []
         # The rule sees that the command is not fixed. Unless it also
@@ -118,3 +128,48 @@ def _command_argument(call: ast.Call) -> ast.expr | None:
         if keyword.arg in _COMMAND_KEYWORDS:
             return keyword.value
     return None
+
+
+def _shell_started_by_hand(
+    command: ast.expr, context: FileContext
+) -> tuple[str, str, ast.expr] | None:
+    """Find a shell started without ``shell=True``.
+
+    ``["sh", "-c", script]`` runs ``script`` through the shell just like
+    ``shell=True`` does. Returns the shell as written, its flag, and the
+    script, or ``None`` when the list does not start a shell this way.
+    """
+    if isinstance(command, ast.Name):
+        command = context.value_of(command) or command
+    if not isinstance(command, ast.List | ast.Tuple) or not command.elts:
+        return None
+    program = command.elts[0]
+    if not (isinstance(program, ast.Constant) and isinstance(program.value, str)):
+        return None
+    # "/bin/bash" and "cmd.exe" are bash and cmd.
+    shell = program.value.replace("\\", "/").rpartition("/")[2].lower()
+    shell = shell.removesuffix(".exe")
+    if shell not in _SHELLS:
+        return None
+    for position, part in enumerate(command.elts[1:-1], start=1):
+        if not (isinstance(part, ast.Constant) and isinstance(part.value, str)):
+            continue
+        if _is_command_flag(shell, part.value):
+            return program.value, part.value, command.elts[position + 1]
+    return None
+
+
+def _is_command_flag(shell: str, flag: str) -> bool:
+    """Return True for the flag that makes the next argument a command.
+
+    That is ``-c``, also among other short flags (``-lc``, ``-ec``), and
+    ``/c`` or ``/k`` for cmd.exe.
+    """
+    if shell == "cmd":
+        return flag.lower() in {"/c", "/k"}
+    return (
+        flag.startswith("-")
+        and not flag.startswith("--")
+        and "c" in flag[1:]
+        and flag[1:].isalpha()
+    )

@@ -31,6 +31,10 @@ _MIN_TOKEN_LENGTH = 16
 # "{password}", "${DB_PASSWORD}", "%s", "%(password)s".
 _PLACEHOLDER = re.compile(r"<.*>|\$?\{.*\}|%s|%\(.*\)s")
 
+# An address with a password in it: "postgres://app:hunter2@db/app". The
+# user name may be empty ("redis://:hunter2@cache"). Group 1 is the password.
+_ADDRESS_PASSWORD = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]*:([^\s/@]+)@")
+
 
 class HardcodedSecret(Rule):
     """SL104: a password or key is written directly in the code.
@@ -46,6 +50,8 @@ class HardcodedSecret(Rule):
         self.secret_key = "s3cr3t"
         connect(host, password="hunter2")
         settings = {"password": "hunter2"}
+        DATABASE_URL = "postgres://app:hunter2@db.local/app"
+        create_engine("postgres://app:hunter2@db.local/app")
 
     Not reported::
 
@@ -53,38 +59,53 @@ class HardcodedSecret(Rule):
         password = ""                           # nothing to steal
         password = "<your password>"            # a placeholder
         password_field = "password"             # a name, not a password
+        url = "postgres://app:${DB_PASSWORD}@db"  # a placeholder
         cache_key = "user:42"                   # not that kind of key
 
-    The rule only reads names, so it cannot find a secret stored under an
-    ordinary name such as ``x = "hunter2"``.
+    The rule mostly reads names, so it cannot find a secret stored under an
+    ordinary name such as ``x = "hunter2"``. The exception is an address
+    with a password in it, which is found under any name, or none.
     """
 
     rule_id = "SL104"
     title = "Password or key written in the code"
-    node_types = (ast.Assign, ast.AnnAssign, ast.keyword, ast.Dict)
+    node_types = (ast.Assign, ast.AnnAssign, ast.keyword, ast.Dict, ast.Call)
 
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         for name, value, where in _named_values(node):
             text = _text_of(value)
-            if text is None or not _is_secret_name(name, text):
+            if text is None:
                 continue
-            if not _looks_real(text):
-                continue
-            yield Finding(
-                rule_id=self.rule_id,
-                # The secret itself is never repeated in the report.
-                message=(
-                    f"A password or key is written in the code as {name!r}; "
-                    "anyone who can read the code can use it. Read it from "
-                    "an environment variable or a secret store instead."
-                ),
-                severity=Severity.MEDIUM,
-                # A name is only a hint: the value may be a test value.
-                confidence=Confidence.MEDIUM,
-                path=context.path,
-                line=where.lineno,
-                column=where.col_offset + 1,
-            )
+            if _is_secret_name(name, text):
+                if _looks_real(text):
+                    yield self._finding(f"as {name!r}", where, context)
+            elif _has_address_password(text):
+                yield self._finding(f"inside the address {name!r}", where, context)
+        # create_engine("postgres://app:hunter2@db/app"): no name at all.
+        if isinstance(node, ast.Call):
+            for argument in node.args:
+                text = _text_of(argument)
+                if text is not None and _has_address_password(text):
+                    yield self._finding("inside an address", argument, context)
+
+    def _finding(
+        self, written: str, where: ast.expr | ast.keyword, context: FileContext
+    ) -> Finding:
+        return Finding(
+            rule_id=self.rule_id,
+            # The secret itself is never repeated in the report.
+            message=(
+                f"A password or key is written in the code {written}; "
+                "anyone who can read the code can use it. Read it from "
+                "an environment variable or a secret store instead."
+            ),
+            severity=Severity.MEDIUM,
+            # A name is only a hint: the value may be a test value.
+            confidence=Confidence.MEDIUM,
+            path=context.path,
+            line=where.lineno,
+            column=where.col_offset + 1,
+        )
 
 
 def _named_values(
@@ -167,3 +188,13 @@ def _looks_real(text: str) -> bool:
     if len(set(text)) == 1:
         return False
     return _PLACEHOLDER.fullmatch(text) is None
+
+
+def _has_address_password(text: str) -> bool:
+    """Return True for an address with a real password in it.
+
+    ``"postgres://app:hunter2@db"`` has one; ``"postgres://app@db"`` and
+    ``"postgres://app:{password}@db"`` do not.
+    """
+    match = _ADDRESS_PASSWORD.search(text)
+    return match is not None and _looks_real(match.group(1))

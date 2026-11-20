@@ -133,3 +133,55 @@ def test_each_secret_in_a_file_is_reported(tmp_path: Path) -> None:
         (2, 1),
         (3, 17),
     ]
+
+
+@pytest.mark.parametrize(
+    ("code", "line"),
+    [
+        ('DATABASE_URL = "postgres://app:hunter2@db.local/app"\n', 1),
+        ('CACHE = "redis://:hunter2@cache:6379/0"\n', 1),
+        ('settings = {"broker": "amqp://guest:s3cr3t@rabbit//"}\n', 1),
+        ('engine = create_engine(\n    "mysql://root:toor@localhost/shop"\n)\n', 2),
+        ('connect(url="postgresql+psycopg://app:hunter2@db/app")\n', 1),
+    ],
+)
+def test_reports_a_password_inside_an_address(
+    tmp_path: Path, code: str, line: int
+) -> None:
+    (finding,) = findings_in(tmp_path, code)
+
+    assert finding.line == line
+    assert "inside" in finding.message
+    # The password is never repeated in the report.
+    assert "hunter2" not in finding.message
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        # A user name but no password.
+        'DATABASE_URL = "postgres://app@db.local/app"\n',
+        # A port, not a password.
+        'API = "https://example.com:8443/v1"\n',
+        # Placeholders.
+        'DATABASE_URL = "postgres://app:${DB_PASSWORD}@db/app"\n',
+        'DATABASE_URL = "postgres://app:<password>@db/app"\n',
+        'DATABASE_URL = "postgres://app:****@db/app"\n',
+        # Built when the program runs.
+        'DATABASE_URL = f"postgres://app:{password}@db/app"\n',
+        # An e-mail address in a path.
+        'LINK = "https://example.com/users/me@example.com"\n',
+    ],
+)
+def test_does_not_report_addresses_without_a_real_password(
+    tmp_path: Path, code: str
+) -> None:
+    assert findings_in(tmp_path, code) == ()
+
+
+def test_an_address_under_a_secret_name_is_reported_once(tmp_path: Path) -> None:
+    code = 'DB_PASSWORD = "postgres://app:hunter2@db/app"\n'
+
+    (finding,) = findings_in(tmp_path, code)
+
+    assert "'DB_PASSWORD'" in finding.message

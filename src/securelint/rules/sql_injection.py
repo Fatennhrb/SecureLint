@@ -15,6 +15,9 @@ from securelint.rules._sources import find_source, with_source
 # and the text must also look like SQL (see ``_SQL_WORD``).
 _QUERY_METHODS = frozenset({"execute", "executemany", "executescript", "raw"})
 
+# Functions, rather than methods, that send a query to a database.
+_QUERY_FUNCTIONS = frozenset({"pandas.read_sql", "pandas.read_sql_query"})
+
 # Names used for the query when it is passed as a keyword argument.
 _QUERY_KEYWORDS = frozenset({"sql", "query", "statement", "operation"})
 
@@ -38,6 +41,7 @@ class SqlInjection(Rule):
         cursor.execute("DELETE FROM users WHERE id = %s" % user_id)
         cursor.execute("SELECT * FROM {}".format(table))
         session.execute(text(f"SELECT * FROM users WHERE id = {user_id}"))
+        pandas.read_sql(f"SELECT * FROM users WHERE id = {user_id}", connection)
 
         query = "SELECT * FROM users"
         query += f" WHERE name = '{name}'"
@@ -64,13 +68,17 @@ class SqlInjection(Rule):
     def check(self, node: ast.AST, context: FileContext) -> Iterable[Finding]:
         if not isinstance(node, ast.Call):
             return []
-        # execute = cursor.execute on one line, execute(...) on another.
-        function = context.value_of(node.func) or node.func
-        if not isinstance(function, ast.Attribute):
-            return []
-        method = function.attr
-        if method not in _QUERY_METHODS:
-            return []
+        name = context.qualified_name(node.func)
+        if name in _QUERY_FUNCTIONS:
+            method = name.rpartition(".")[2]
+        else:
+            # execute = cursor.execute on one line, execute(...) on another.
+            function = context.value_of(node.func) or node.func
+            if not isinstance(function, ast.Attribute):
+                return []
+            method = function.attr
+            if method not in _QUERY_METHODS:
+                return []
         query = _query_argument(node, context)
         if query is None:
             return []
